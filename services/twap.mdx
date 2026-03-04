@@ -1,0 +1,496 @@
+---
+title: TWAP Service
+description: Time-Weighted Average Price (TWAP) order management service
+---
+
+The TWAP service is a Fastify-based API that manages time-weighted average price orders for CoW Protocol. It stores TWAP order configurations and provides endpoints for creating, retrieving, and managing conditional orders that execute in parts over time.
+
+## Purpose and Responsibilities
+
+The TWAP service handles:
+
+- **TWAP Order Storage**: Persists TWAP order configurations and associated Safe transaction data
+- **Order Retrieval**: Provides endpoints to query TWAP orders by wallet and chain
+- **Order Validation**: Validates TWAP order parameters before storage
+- **Orderbook Integration**: Reads CoW Protocol orderbook data to track order execution
+- **Multi-Chain Support**: Supports Mainnet (1), Goerli (5), and Gnosis Chain (100)
+
+## How to Run
+
+### Development
+
+```bash
+# Start dependencies
+docker-compose up -d db              # PostgreSQL for TWAP data
+docker-compose up -d orderbook-db    # CoW orderbook database (read-only)
+
+# Run database migrations
+yarn twap:migration:run
+
+# Start the TWAP service
+yarn nx start twap
+
+# The service will be available at http://localhost:3001
+```
+
+### Production
+
+```bash
+# Build the application
+yarn build twap
+
+# Start the server
+node dist/apps/twap/main.js
+```
+
+### Docker
+
+```bash
+# Build the Docker image
+yarn docker-build twap
+
+# Run the container
+docker run -p 3001:3001 \
+  -e DATABASE_HOST=postgres \
+  -e ORDERBOOK_DATABASE_HOST=orderbook-db \
+  twap
+```
+
+## Key Configuration Options
+
+All configuration is handled through environment variables defined in `apps/twap/src/app/plugins/env.ts:1`.
+
+### Server Configuration
+
+| Variable | Description | Default |
+|----------|-------------|--------|
+| `HOST` | Server host address | `localhost` |
+| `PORT` | Server port | `3001` |
+
+### TWAP Database Configuration
+
+Required database for storing TWAP order data:
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DATABASE_NAME` | Database name | **Yes** |
+| `DATABASE_HOST` | Database host | **Yes** |
+| `DATABASE_PORT` | Database port | **Yes** |
+| `DATABASE_USERNAME` | Database user | **Yes** |
+| `DATABASE_PASSWORD` | Database password | **Yes** |
+
+**Example**:
+```bash
+DATABASE_NAME=twap
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_USERNAME=twap_user
+DATABASE_PASSWORD=secure_password
+```
+
+### Orderbook Database Configuration
+
+Read-only access to CoW Protocol orderbook database for tracking order execution:
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `ORDERBOOK_DATABASE_HOST` | Orderbook DB host | **Yes** |
+| `ORDERBOOK_DATABASE_PORT` | Orderbook DB port | **Yes** |
+| `ORDERBOOK_DATABASE_USERNAME` | Orderbook DB user | **Yes** |
+| `ORDERBOOK_DATABASE_PASSWORD` | Orderbook DB password | **Yes** |
+
+**Example**:
+```bash
+ORDERBOOK_DATABASE_HOST=orderbook.cow.fi
+ORDERBOOK_DATABASE_PORT=5432
+ORDERBOOK_DATABASE_USERNAME=readonly_user
+ORDERBOORT_DATABASE_PASSWORD=readonly_pass
+```
+
+## Main Endpoints
+
+All endpoints are chain and wallet-specific:
+
+### GET /:chainId/:walletAddress/orders
+
+Retrieve all TWAP orders for a wallet on a specific chain.
+
+**Parameters**:
+- `chainId` - Chain ID (1, 5, or 100)
+- `walletAddress` - Ethereum wallet address (42 characters, checksummed)
+
+**Response**:
+```json
+[
+  {
+    "id": 1,
+    "chainId": 1,
+    "sellToken": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    "buyToken": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "receiver": "0x...",
+    "partSellAmount": "1000000000000000000",
+    "minPartLimit": "3000000000",
+    "t0": 1698765432,
+    "n": 10,
+    "t": 300,
+    "span": 0,
+    "appData": "0x...",
+    "wallet": {
+      "address": "0x..."
+    }
+  }
+]
+```
+
+**Example**:
+```bash
+curl http://localhost:3001/1/0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb/orders
+```
+
+### POST /:chainId/:walletAddress/orders
+
+Create a new TWAP order.
+
+**Parameters**:
+- `chainId` - Chain ID (1, 5, or 100)
+- `walletAddress` - Ethereum wallet address
+
+**Request Body**:
+```json
+{
+  "order": {
+    "sellToken": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    "buyToken": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "receiver": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+    "partSellAmount": "1000000000000000000",
+    "minPartLimit": "3000000000",
+    "t0": 1698765432,
+    "n": 10,
+    "t": 300,
+    "span": 0,
+    "appData": "0x..."
+  },
+  "safeTxHash": "0xabc123..."
+}
+```
+
+**TWAP Parameters Explained**:
+- `sellToken` - Token to sell (ERC20 address)
+- `buyToken` - Token to buy (ERC20 address)
+- `receiver` - Address to receive bought tokens
+- `partSellAmount` - Amount to sell per part (in wei)
+- `minPartLimit` - Minimum amount to receive per part (in wei)
+- `t0` - Start time (Unix timestamp)
+- `n` - Number of parts
+- `t` - Time interval between parts (seconds)
+- `span` - Span of each part (0 for atomic execution)
+- `appData` - App data hash
+- `safeTxHash` - Safe transaction hash for the order creation
+
+**Response**: Returns the created order object with ID.
+
+**Example**:
+```bash
+curl -X POST http://localhost:3001/1/0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+    "order": { ... },
+    "safeTxHash": "0x..."
+  }'
+```
+
+See implementation: `apps/twap/src/app/routes/_chainId/_walletAddress/orders/index.ts:1`
+
+## Data Model
+
+### Order Entity
+
+The Order entity represents a TWAP order configuration:
+
+```typescript
+// From apps/twap/src/app/data/order.ts
+
+@Entity()
+export class Order {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  chainId: number;
+
+  @Column({ length: 42 })
+  sellToken: string;
+
+  @Column({ length: 42 })
+  buyToken: string;
+
+  @Column({ length: 42 })
+  receiver: string;
+
+  @Column()
+  partSellAmount: string;
+
+  @Column()
+  minPartLimit: string;
+
+  @Column()
+  t0: number;  // Start time
+
+  @Column()
+  n: number;   // Number of parts
+
+  @Column()
+  t: number;   // Time between parts
+
+  @Column()
+  span: number;
+
+  @Column()
+  appData: string;
+
+  @ManyToOne(() => Wallet, wallet => wallet.orders)
+  wallet: Wallet;
+}
+```
+
+### Wallet Entity
+
+The Wallet entity represents a Safe wallet:
+
+```typescript
+// From apps/twap/src/app/data/wallet.ts
+
+@Entity()
+export class Wallet {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column({ length: 42, unique: true })
+  address: string;
+
+  @OneToMany(() => Order, order => order.wallet)
+  orders: Order[];
+}
+```
+
+### SafeTx Entity
+
+Stores Safe transaction information:
+
+```typescript
+// From apps/twap/src/app/data/safeTx.ts
+
+@Entity()
+export class SafeTx {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  safeTxHash: string;
+
+  // ... additional Safe transaction fields
+}
+```
+
+## Dependencies
+
+### Required Services
+
+<Card title="PostgreSQL Database" icon="database">
+  Primary database for TWAP order storage.
+  
+  **Entities**:
+  - `wallet` - Safe wallet addresses
+  - `order` - TWAP order configurations
+  - `safe_tx` - Safe transaction data
+  
+  **Migrations**: Managed with TypeORM in `apps/twap/src/migrations/`
+</Card>
+
+<Card title="CoW Orderbook Database" icon="database">
+  Read-only access to CoW Protocol orderbook.
+  
+  Used for:
+  - Querying order execution status
+  - Reading settlement events
+  - Tracking trade history
+  
+  This is a separate PostgreSQL instance maintained by the CoW Protocol team.
+</Card>
+
+## Database Migrations
+
+The TWAP service uses TypeORM for database migrations.
+
+### Configuration
+
+Migration configuration is in `apps/twap/datasource.config.ts:1`:
+
+```typescript
+const dataSource = new DataSource({
+  type: 'postgres',
+  host: process.env.DATABASE_HOST,
+  port: Number(process.env.DATABASE_PORT),
+  username: process.env.DATABASE_USERNAME,
+  password: process.env.DATABASE_PASSWORD,
+  database: process.env.DATABASE_NAME,
+  entities: ['src/app/data/*.ts'],
+  migrations: ['src/migrations/*.ts'],
+});
+```
+
+### Running Migrations
+
+```bash
+# Generate a new migration (auto-detects changes from entities)
+nx run twap:generate-migrations
+
+# Run pending migrations
+nx run twap:run-migrations
+
+# View migration status
+nx run twap:typeorm migration:show -d datasource.config.ts
+```
+
+### Initial Migration
+
+The initial migration creates the base schema:
+
+```typescript
+// From apps/twap/src/migrations/1688063749511-initial-migration.ts
+
+export class InitialMigration1688063749511 implements MigrationInterface {
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    // Creates wallet, order, and safe_tx tables
+  }
+  
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    // Reverts the migration
+  }
+}
+```
+
+## Plugin Architecture
+
+The TWAP service uses Fastify plugins for modular functionality:
+
+### Environment Plugin
+
+Validates required environment variables at startup.
+
+**File**: `apps/twap/src/app/plugins/env.ts:1`
+
+**Validates**:
+- All database configuration variables
+- Required fields vs optional fields
+- Data types (string, number, etc.)
+
+### ORM Plugin
+
+Configures TypeORM connection to the TWAP database.
+
+**File**: `apps/twap/src/app/plugins/orm.ts:1`
+
+**Provides**:
+- Database connection
+- Repository access via `fastify.orm.getRepository(Order)`
+- Transaction management
+
+### Orderbook Plugin
+
+Configures read-only connection to CoW orderbook database.
+
+**File**: `apps/twap/src/app/plugins/orderbook.ts:1`
+
+**Used for**:
+- Reading order execution status
+- Querying settlement events
+- Accessing trade history
+
+### Swagger Plugin
+
+Generates OpenAPI documentation for the API.
+
+**File**: `apps/twap/src/app/plugins/swagger.ts:1`
+
+**Access**: `http://localhost:3001/documentation` when running locally
+
+## TWAP Order Execution
+
+While the TWAP service stores order configurations, the actual execution is handled by:
+
+1. **CoW Protocol Watchtower**: Monitors TWAP orders and creates individual parts
+2. **CoW Protocol Orderbook**: Matches and settles individual order parts
+3. **Safe Infrastructure**: Executes transactions from Safe wallets
+
+The TWAP service is primarily a **configuration storage** layer, not an execution engine.
+
+## API Integration
+
+The main API service can proxy requests to the TWAP service:
+
+```typescript
+// From apps/api/src/app/routes/twap/index.ts:1
+
+fastify.register(httpProxy, {
+  upstream: fastify.config.TWAP_BASE_URL,
+});
+```
+
+This allows the main API to expose TWAP endpoints without implementing the logic directly.
+
+**Configuration**:
+```bash
+# In API service .env
+TWAP_BASE_URL=http://twap-service:3001
+```
+
+## Nx Commands
+
+```bash
+# Development server
+nx start twap
+
+# Build for production
+nx build twap
+
+# Run tests
+nx test twap
+
+# Lint
+nx lint twap
+
+# Docker build
+nx docker-build twap
+
+# TypeORM commands
+nx run twap:typeorm --help
+nx run twap:generate-migrations
+nx run twap:run-migrations
+```
+
+## Monitoring and Logs
+
+The service uses Fastify's built-in logger:
+
+```javascript
+const server = Fastify({
+  logger: true,
+});
+```
+
+**Log Output**:
+```json
+{
+  "level": "info",
+  "time": 1698765432000,
+  "msg": "Server listening at http://localhost:3001",
+  "hostname": "..."
+}
+```
+
+## Related Services
+
+- [API Service](/services/api) - Proxies TWAP requests and provides frontend integration
+- CoW Protocol Orderbook - Executes individual TWAP order parts
+- Safe Infrastructure - Manages wallet transactions for TWAP orders

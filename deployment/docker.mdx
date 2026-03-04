@@ -1,0 +1,520 @@
+---
+title: Docker Deployment
+description: Deploy CoW Protocol BFF services using Docker and Docker Compose
+---
+
+The CoW Protocol BFF uses Docker for containerized deployment and Docker Compose for orchestrating multiple services in local and production environments.
+
+## Architecture Overview
+
+The BFF consists of multiple containerized services:
+
+- **API Service** (`api`) - Main API gateway running on port 1500
+- **TWAP Service** (`twap`) - Time-weighted average price service on port 3000
+- **Notification Producer** (`notification-producer`) - Produces notifications for blockchain events
+- **Telegram Bot** (`telegram`) - Telegram notification consumer
+- **PostgreSQL** (`db`) - Primary database on port 5432
+- **RabbitMQ** (`queue`) - Message queue on ports 5672 and 15672
+- **Redis** (`redis`) - Caching layer on port 6379
+
+## Building Docker Images
+
+### Building with NX
+
+The project uses NX to build Docker images for each service. Each app has a `docker-build` target in its `project.json`:
+
+```bash
+# Build a specific service
+nx run api:docker-build
+nx run twap:docker-build
+nx run notification-producer:docker-build
+nx run telegram:docker-build
+```
+
+### Building All Affected Services
+
+Build all services that have been modified:
+
+```bash
+yarn docker-build:affected
+```
+
+This command:
+1. Detects which services have changes
+2. Builds their Docker images in parallel (max 3 concurrent builds)
+3. Tags them for local use
+
+### Dockerfile Structure
+
+All services use a similar multi-stage Dockerfile pattern:
+
+```dockerfile
+FROM docker.io/node:lts-alpine
+
+ENV HOST=0.0.0.0
+ENV PORT=<service-port>
+
+WORKDIR /app
+
+# Create non-root user
+RUN addgroup --system <service> && \
+  adduser --system -G <service> <service>
+
+# Copy built artifacts from dist/
+COPY dist/apps/<service> <service>
+RUN chown -R <service>:<service> .
+
+# Install production dependencies
+RUN yarn --cwd <service> install --production -f
+
+CMD [ "node", "<service>" ]
+```
+
+<Note>
+  All Dockerfiles run as non-root users for security and use the lightweight Alpine Linux base image.
+</Note>
+
+## Docker Compose Setup
+
+### Local Development
+
+1. **Create environment file:**
+
+```bash
+# For Docker Compose
+cp .env.example .env.docker
+
+# For local development (optional)
+cp .env.example .env
+```
+
+2. **Start all services:**
+
+```bash
+yarn compose:up
+```
+
+This command builds affected services and starts the entire stack.
+
+3. **Start individual services:**
+
+```bash
+# Start only the database
+docker-compose up -d db
+
+# Start queue for notification testing
+docker-compose up -d queue
+
+# Start Redis for caching
+docker-compose up -d redis
+```
+
+### Service Configuration
+
+#### API Service
+
+```yaml
+services:
+  api:
+    container_name: api
+    platform: linux/amd64
+    image: api:latest
+    restart: unless-stopped
+    env_file: .env.docker
+    ports:
+      - '1500:1500'
+    networks:
+      - bff-network
+    depends_on:
+      - db
+```
+
+<Accordion title="Complete docker-compose.yml reference">
+  The full configuration includes:
+  - Volume mounts for hot-reloading in development
+  - Environment variable overrides
+  - Network isolation
+  - Service dependencies
+  - Health checks for queue and Redis
+</Accordion>
+
+#### TWAP Service
+
+```yaml
+services:
+  twap:
+    container_name: twap
+    platform: linux/amd64
+    image: twap:latest
+    restart: unless-stopped
+    env_file: .env.docker
+    ports:
+      - '3000:3000'
+    networks:
+      - bff-network
+    depends_on:
+      - db
+```
+
+#### Database (PostgreSQL)
+
+```yaml
+services:
+  db:
+    container_name: db
+    platform: linux/amd64
+    image: postgres:14.5-alpine
+    environment:
+      POSTGRES_USER: ${DATABASE_USERNAME}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}
+    volumes:
+      - data-postgres:/var/lib/postgresql/data/
+    ports:
+      - '5432:${DATABASE_PORT}'
+    networks:
+      - bff-network
+```
+
+#### Message Queue (RabbitMQ)
+
+```yaml
+services:
+  queue:
+    container_name: queue
+    image: rabbitmq:3.13.2
+    restart: unless-stopped
+    ports:
+      - '15672:15672'  # Management UI
+      - '5672:5672'    # AMQP
+    environment:
+      RABBITMQ_DEFAULT_USER: ${QUEUE_USER}
+      RABBITMQ_DEFAULT_PASS: ${QUEUE_PASSWORD}
+    volumes:
+      - data-rabbitmq:/var/lib/rabbitmq
+    networks:
+      - bff-network
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:15672']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+```
+
+<Info>
+  RabbitMQ management UI is available at `http://localhost:15672` with the credentials from your `.env.docker` file.
+</Info>
+
+#### Cache (Redis)
+
+```yaml
+services:
+  redis:
+    container_name: redis
+    image: redis:7.2.5
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - data-redis:/data
+      - ./conf/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    networks:
+      - bff-network
+    entrypoint: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+```
+
+The Redis configuration (`conf/redis/redis.conf`) includes:
+- Password authentication
+- Disabled dangerous commands (FLUSHDB, FLUSHALL, CONFIG)
+- 256MB memory limit with LRU eviction
+- Persistence configuration
+
+## Production Deployment
+
+### Building Production Images
+
+1. **Build with production configuration:**
+
+```bash
+# Build individual service
+nx run api:build:production
+
+# Build Docker image
+nx run api:docker-build
+```
+
+2. **Tag and push to registry:**
+
+```bash
+# Tag for your registry
+docker tag api:latest your-registry.io/cow-bff/api:v0.24.0
+docker tag api:latest your-registry.io/cow-bff/api:latest
+
+# Push to registry
+docker push your-registry.io/cow-bff/api:v0.24.0
+docker push your-registry.io/cow-bff/api:latest
+```
+
+### Platform Considerations
+
+<Warning>
+  Most services specify `platform: linux/amd64` for compatibility. The `queue` service intentionally omits this for Apple Silicon compatibility.
+</Warning>
+
+For multi-platform builds:
+
+```bash
+docker buildx build \
+  --platform=linux/amd64,linux/arm64 \
+  -f apps/api/Dockerfile \
+  -t your-registry.io/cow-bff/api:latest \
+  --push \
+  .
+```
+
+### Environment Variables
+
+Production deployments should use:
+- Separate `.env` files or secrets management
+- Secure database credentials
+- External PostgreSQL, Redis, and RabbitMQ services
+- TLS/SSL for inter-service communication
+
+See [Environment Variables](/deployment/environment-variables) for a complete reference.
+
+### Database Migrations
+
+Run migrations before deploying new versions:
+
+```bash
+# Inside the api or twap container
+yarn migration:run
+
+# Or using Docker Compose
+docker-compose exec api yarn migration:run
+```
+
+### Resource Requirements
+
+<AccordionGroup>
+  <Accordion title="Minimum Resources">
+    - **API/TWAP**: 512MB RAM, 0.5 CPU
+    - **PostgreSQL**: 1GB RAM, 1 CPU
+    - **Redis**: 512MB RAM, 0.5 CPU
+    - **RabbitMQ**: 512MB RAM, 0.5 CPU
+    - **Notification Services**: 256MB RAM, 0.25 CPU
+  </Accordion>
+  
+  <Accordion title="Recommended Production Resources">
+    - **API/TWAP**: 2GB RAM, 1 CPU
+    - **PostgreSQL**: 4GB RAM, 2 CPUs
+    - **Redis**: 1GB RAM, 1 CPU
+    - **RabbitMQ**: 1GB RAM, 1 CPU
+    - **Notification Services**: 512MB RAM, 0.5 CPU
+  </Accordion>
+</AccordionGroup>
+
+## Health Checks and Monitoring
+
+### Built-in Health Checks
+
+The Docker Compose configuration includes health checks for critical services:
+
+```yaml
+# RabbitMQ health check
+healthcheck:
+  test: ['CMD', 'curl', '-f', 'http://localhost:15672']
+  interval: 30s
+  timeout: 10s
+  retries: 5
+
+# Redis health check
+healthcheck:
+  test: ['CMD', 'redis-cli', 'ping']
+  interval: 30s
+  timeout: 10s
+  retries: 5
+```
+
+### API Health Endpoint
+
+The API service exposes health information at:
+
+```bash
+curl http://localhost:1500/about
+```
+
+Response includes:
+- Application version
+- Service status
+- Environment information
+
+### Monitoring Service Logs
+
+```bash
+# View logs for all services
+docker-compose logs -f
+
+# View logs for specific service
+docker-compose logs -f api
+
+# View last 100 lines
+docker-compose logs --tail=100 api
+```
+
+### Service Dependencies
+
+Services are configured with `depends_on` to ensure proper startup order:
+
+```yaml
+api:
+  depends_on:
+    - db
+
+notification-producer:
+  depends_on:
+    - queue
+    # condition: service_healthy  # Uncomment when health check is working
+```
+
+<Note>
+  Service health conditions are commented out due to known issues. Services should implement retry logic for connecting to dependencies.
+</Note>
+
+## Development Workflow
+
+### Hot Reloading
+
+The docker-compose.yml includes volume mounts for development:
+
+```yaml
+volumes:
+  - ./src:/app/src
+  - ./node_modules:/app/node_modules
+  - ./package.json:/app/package.json
+  - ./.env.docker:/app/.env
+```
+
+This enables code changes without rebuilding containers.
+
+### Running Tests in Docker
+
+```bash
+# Run all tests
+docker-compose exec api yarn test
+
+# Run specific test suite
+docker-compose exec api nx run repositories:test
+
+# Run tests with coverage
+docker-compose exec api yarn test --coverage
+```
+
+### Debugging
+
+```bash
+# Access container shell
+docker-compose exec api sh
+
+# Check container environment
+docker-compose exec api env
+
+# Inspect network connectivity
+docker-compose exec api ping db
+```
+
+## Networking
+
+All services communicate over a custom bridge network:
+
+```yaml
+networks:
+  bff-network:
+    name: bff-network
+    driver: bridge
+```
+
+Services can reference each other by container name:
+- `http://api:1500`
+- `http://twap:3000`
+- `postgresql://db:5432`
+- `amqp://queue:5672`
+- `redis://redis:6379`
+
+## Persistent Storage
+
+Data volumes ensure persistence across container restarts:
+
+```yaml
+volumes:
+  data-postgres:    # PostgreSQL data
+  data-rabbitmq:    # RabbitMQ data
+  data-redis:       # Redis data
+```
+
+### Backing Up Data
+
+```bash
+# Backup PostgreSQL
+docker-compose exec db pg_dump -U ${DATABASE_USERNAME} ${DATABASE_NAME} > backup.sql
+
+# Restore PostgreSQL
+cat backup.sql | docker-compose exec -T db psql -U ${DATABASE_USERNAME} ${DATABASE_NAME}
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Port conflicts">
+    If ports are already in use, modify the port mappings in docker-compose.yml:
+    
+    ```yaml
+    ports:
+      - '8080:1500'  # Map container port 1500 to host port 8080
+    ```
+  </Accordion>
+  
+  <Accordion title="Permission errors">
+    Ensure mounted volumes have correct permissions:
+    
+    ```bash
+    sudo chown -R $(id -u):$(id -g) ./
+    ```
+  </Accordion>
+  
+  <Accordion title="Service won't start">
+    Check logs for the specific service:
+    
+    ```bash
+    docker-compose logs api
+    ```
+    
+    Verify environment variables in `.env.docker` are set correctly.
+  </Accordion>
+  
+  <Accordion title="Database connection errors">
+    Ensure the database is fully initialized before starting dependent services:
+    
+    ```bash
+    docker-compose up -d db
+    sleep 10  # Wait for PostgreSQL to initialize
+    docker-compose up -d api twap
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Environment Variables" icon="gear" href="/deployment/environment-variables">
+    Configure all environment variables for each service
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference/introduction">
+    Explore available API endpoints
+  </Card>
+</CardGroup>

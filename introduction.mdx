@@ -1,0 +1,110 @@
+---
+title: Introduction
+description: Backend for Frontend services that enhance user experience for CoW Swap and CoW Protocol applications
+---
+
+## Welcome to CoW Protocol BFF
+
+CoW Protocol BFF (Backend For Frontend) is a comprehensive collection of TypeScript-based backend services designed to power the CoW Swap frontend and other CoW Protocol applications. Built with modern tools and best practices, it provides essential services for token pricing, notifications, yield aggregation, and more.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get up and running with the BFF services in minutes
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Explore the complete REST API documentation
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/architecture">
+    Understand the system design and components
+  </Card>
+  <Card title="Development Guide" icon="hammer" href="/development/setup">
+    Learn how to develop and contribute to the project
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<AccordionGroup>
+  <Accordion title="Multi-Chain Token Services" icon="coins">
+    Retrieve token prices, balances, and holder information across multiple blockchain networks including Ethereum, Gnosis Chain, Polygon, Arbitrum, Base, and more.
+  </Accordion>
+  
+  <Accordion title="Real-Time Balance Tracking" icon="chart-line">
+    Server-Sent Events (SSE) powered real-time balance updates for user wallets, with support for multiple tokens simultaneously.
+  </Accordion>
+  
+  <Accordion title="Push Notifications" icon="bell">
+    Telegram-based notification system with RabbitMQ message queue for reliable order status updates and important alerts.
+  </Accordion>
+  
+  <Accordion title="Market Intelligence" icon="chart-mixed">
+    Dynamic slippage tolerance calculation based on market volatility, helping users optimize their trades.
+  </Accordion>
+  
+  <Accordion title="Transaction Simulation" icon="flask">
+    Tenderly-powered transaction simulation to preview trade outcomes before execution.
+  </Accordion>
+  
+  <Accordion title="DeFi Yield Aggregation" icon="percent">
+    Track and compare yield opportunities across multiple DeFi protocols and liquidity pools.
+  </Accordion>
+</AccordionGroup>
+
+## Technology Stack
+
+The BFF is built on a modern TypeScript stack:
+
+- **Framework**: Fastify for high-performance HTTP services
+- **Monorepo**: NX for efficient workspace management
+- **Database**: PostgreSQL with TypeORM
+- **Caching**: Redis with multi-layer fallback strategies
+- **Messaging**: RabbitMQ for asynchronous notifications
+- **Blockchain**: Ethers.js and Viem for web3 interactions
+
+## Architecture Overview
+
+The BFF follows a modular architecture with four main applications:
+
+<CardGroup cols={2}>
+  <Card title="API Service" icon="server" href="/services/api">
+    Main REST API serving frontend requests
+  </Card>
+  <Card title="Notification Producer" icon="paper-plane" href="/services/notification-producer">
+    Monitors blockchain events and generates notifications
+  </Card>
+  <Card title="Telegram Service" icon="telegram" href="/services/telegram">
+    Consumes notifications and sends them via Telegram
+  </Card>
+  <Card title="TWAP Service" icon="chart-area" href="/services/twap">
+    Time-weighted average price calculations
+  </Card>
+</CardGroup>
+
+Shared libraries provide reusable functionality:
+
+- **Repositories**: Data access layer for various external services
+- **Services**: Business logic for token prices, balances, simulations, etc.
+- **Shared**: Common utilities, types, and constants
+
+## Multi-Chain Support
+
+The BFF supports multiple blockchain networks out of the box:
+
+| Network | Chain ID | Support Level |
+|---------|----------|---------------|
+| Ethereum Mainnet | 1 | Full |
+| Gnosis Chain | 100 | Full |
+| Polygon | 137 | Full |
+| Arbitrum One | 42161 | Full |
+| Base | 8453 | Full |
+| Avalanche | 43114 | Full |
+| BNB Chain | 56 | Full |
+| Sepolia Testnet | 11155111 | Full |
+
+## Getting Started
+
+Ready to dive in? Start with our quickstart guide to set up your development environment and run the services locally.
+
+<Card title="Quickstart Guide" icon="play" href="/quickstart">
+  Follow step-by-step instructions to get the BFF running locally
+</Card>

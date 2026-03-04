@@ -1,80 +1,350 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart Guide
+description: Get up and running with CoW Protocol BFF in minutes
 ---
 
-## Get started in three steps
+This guide will help you set up and run the CoW Protocol Backend for Frontend (BFF) locally.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Before you begin, ensure you have the following installed:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+- Node.js (v18 or higher)
+- Yarn package manager
+- Docker and Docker Compose
+- Git
+
+## Installation
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the BFF repository to your local machine:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```bash
+    git clone https://github.com/cowprotocol/bff.git
+    cd bff
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    Install all required Node.js dependencies using Yarn:
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    ```bash
+    yarn
+    ```
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    This will also automatically generate API types from Swagger definitions via the `postinstall` hook.
+  </Step>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+  <Step title="Configure environment variables">
+    Create your environment configuration file from the example template:
+    
+    <CodeGroup>
+    ```bash Local Development
+    cp .env.example .env
+    ```
+    
+    ```bash Docker Development
+    cp .env.example .env.docker
+    ```
+    </CodeGroup>
+    
+    <Tip>
+    Use `.env` for running services locally via NX commands, and `.env.docker` when running services through Docker Compose.
+    </Tip>
+    
+    Key environment variables to configure:
+    
+    ```bash .env
+    # Port for the API service (default: 3001)
+    PORT=3001
+    
+    # RPC URLs for blockchain networks
+    RPC_URL_1=https://mainnet.infura.io/v3/your-infura-key
+    RPC_URL_100=https://rpc.gnosischain.com
+    
+    # CoW Protocol API endpoints
+    COW_API_BASE_URL=https://api.cow.fi
+    COW_API_URL_1=https://api.cow.fi/mainnet
+    COW_API_URL_100=https://api.cow.fi/xdai
+    
+    # Database configuration
+    DATABASE_ENABLED=true
+    DATABASE_HOST=localhost
+    DATABASE_USERNAME=bff-db-user
+    DATABASE_PASSWORD=bff-db-password
+    DATABASE_NAME=bff-db
+    DATABASE_PORT=5432
+    
+    # Redis cache (optional but recommended)
+    REDIS_ENABLED=true
+    REDIS_HOST=localhost
+    REDIS_PORT=6379
+    REDIS_USER=cow_redis
+    REDIS_PASSWORD=cow_password
+    
+    # RabbitMQ for notifications
+    QUEUE_USER=rabbit
+    QUEUE_PASSWORD=my-rabbit-password
+    QUEUE_HOST=localhost
+    QUEUE_PORT=5672
+    ```
+  </Step>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Start infrastructure services">
+    Launch the required infrastructure services (PostgreSQL, RabbitMQ, Redis) using Docker Compose:
+    
+    ```bash
+    yarn compose:up
+    ```
+    
+    This command will:
+    1. Build Docker images for affected services
+    2. Start PostgreSQL database on port `5432`
+    3. Start RabbitMQ message queue on port `5672` (management UI on `15672`)
+    4. Start Redis cache on port `6379`
+    
+    <Info>
+    To start only specific services, use Docker Compose directly:
+    ```bash
+    docker-compose up -d db redis queue
+    ```
+    </Info>
+  </Step>
 
-### Step 3: Go live
+  <Step title="Run database migrations">
+    Initialize the database schema by running migrations:
+    
+    ```bash
+    yarn migration:run
+    ```
+    
+    This creates the necessary tables for storing notification subscriptions, indexer state, and other data.
+  </Step>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+  <Step title="Start the API service">
+    Launch the main API service:
+    
+    ```bash
+    yarn start
+    ```
+    
+    The API server will start on `http://localhost:3001` by default.
+    
+    <Tip>
+    You can also use `yarn start:api` which is an alias for the same command.
+    </Tip>
+  </Step>
+</Steps>
 
-## Next steps
+## Verify Installation
 
-Now that you have your docs running, explore these key features:
+Once the API is running, verify everything is working correctly:
+
+<Steps>
+  <Step title="Check the about endpoint">
+    Test the basic API health:
+    
+    ```bash
+    curl http://localhost:3001/about
+    ```
+    
+    Expected response:
+    ```json
+    {
+      "name": "BFF API",
+      "version": "0.24.0",
+      "gitCommitHash": "..."
+    }
+    ```
+  </Step>
+
+  <Step title="Test a real API endpoint">
+    Fetch token balances for an Ethereum address:
+    
+    ```bash
+    curl -X GET "http://localhost:3001/1/accounts/0x87A04752E516548B0d5d4DF97384C0b22B649179/balances?tokens=0x4d5f47fa6a74757f35c14fd3a6ef8e3c9bc514e8,0x6b175474e89094c44da98b954eedeac495271d0f"
+    ```
+    
+    This fetches DAI and another token balance for the specified address on Ethereum mainnet (chainId: 1).
+  </Step>
+
+  <Step title="Access the Swagger documentation">
+    Open your browser and navigate to:
+    
+    ```
+    http://localhost:3001/docs
+    ```
+    
+    This provides an interactive API documentation interface powered by Swagger UI.
+  </Step>
+</Steps>
+
+## Running Additional Services
+
+The BFF includes several other services beyond the main API:
+
+### Notification Producer
+
+The notification producer monitors blockchain events and generates push notifications:
+
+```bash
+# Start for all supported chains
+yarn producer
+
+# Start for specific chains only (mainnet and Gnosis)
+NOTIFICATIONS_PRODUCER_CHAINS=1,100 yarn producer
+```
+
+### Telegram Bot
+
+The Telegram notification consumer requires a bot token:
+
+```bash
+# Set your Telegram bot secret in .env
+TELEGRAM_SECRET=your-bot-token-here
+
+# Start the Telegram bot
+yarn telegram
+```
+
+### TWAP Service
+
+The Time-Weighted Average Price service:
+
+```bash
+# Run TWAP migrations first
+yarn twap:run-migrations
+
+# Start TWAP service (via Docker)
+docker-compose up twap
+```
+
+## Development Workflow
+
+### Running Tests
+
+```bash
+# Run all tests
+yarn test
+
+# Run tests for a specific library in watch mode
+nx run repositories:test --watch
+
+# Run a specific test file
+nx run repositories:test --watch --testFile=libs/repositories/src/UsdRepository/UsdRepositoryRedis.spec.ts
+```
+
+### Linting and Type Checking
+
+```bash
+# Run linter for all projects
+yarn lint
+
+# Build all projects to check for type errors
+yarn build
+```
+
+### Database Operations
+
+<CodeGroup>
+```bash Create Migration
+# Create a new empty migration
+yarn typeorm migration:create src/migrations/your-migration-name
+
+# Or generate from entity changes
+yarn migration:generate
+```
+
+```bash Run Migrations
+# Apply pending migrations
+yarn migration:run
+```
+
+```bash Revert Migration
+# Rollback the last migration
+yarn migration:revert
+```
+</CodeGroup>
+
+## Next Steps
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Architecture Overview" icon="diagram-project" href="/architecture">
+    Learn about the monorepo structure and design patterns
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Explore the complete API documentation
+  </Card>
+  <Card title="Environment Variables" icon="gear" href="/deployment/environment-variables">
+    Deep dive into environment variables and settings
+  </Card>
+  <Card title="Docker Deployment" icon="rocket" href="/deployment/docker">
+    Deploy BFF to production environments
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="DriverPackageNotInstalledError: Postgres package not found">
+    If you encounter this TypeORM error:
+    
+    ```
+    DriverPackageNotInstalledError: Postgres package has not been found installed. Try to install it: npm install pg --save
+    ```
+    
+    This is typically a TypeORM module resolution issue. The `pg` package is already installed as a dependency.
+    
+    **Solution**: Clear your node_modules and reinstall:
+    ```bash
+    rm -rf node_modules
+    yarn install
+    ```
+    
+    See [PR #101](https://github.com/cowprotocol/bff/pull/101) for more details.
+  </Accordion>
+
+  <Accordion title="Docker containers fail to start">
+    If services fail to start via Docker Compose:
+    
+    1. Check that ports are not already in use:
+       ```bash
+       lsof -i :5432  # PostgreSQL
+       lsof -i :5672  # RabbitMQ
+       lsof -i :6379  # Redis
+       ```
+    
+    2. Ensure Docker has enough resources allocated (especially on macOS)
+    
+    3. Try rebuilding images:
+       ```bash
+       docker-compose down -v
+       yarn compose:up
+       ```
+  </Accordion>
+
+  <Accordion title="API returns 500 errors for balance queries">
+    Balance queries require:
+    1. Valid RPC URLs configured for the target chain
+    2. Redis running (for caching) or `REDIS_ENABLED=false`
+    3. Proper network configuration
+    
+    Check the API logs for specific error messages:
+    ```bash
+    yarn start
+    # Look for ERROR level logs
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Getting Help
+
+<CardGroup cols={2}>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/cowprotocol/bff/issues">
+    Report bugs or request features
+  </Card>
+  <Card title="Discord Community" icon="discord" href="https://discord.gg/cowprotocol">
+    Chat with the community and get support
+  </Card>
+</CardGroup>

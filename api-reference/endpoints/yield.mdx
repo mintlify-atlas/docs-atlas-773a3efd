@@ -1,0 +1,408 @@
+---
+title: Yield Endpoints
+description: Endpoints for retrieving liquidity pool information and APR data from various DEX protocols
+---
+
+Yield endpoints provide information about liquidity pools and their annual percentage rates (APR) across multiple DEX protocols.
+
+## Get Pools Information
+
+<CodeGroup>
+```bash cURL - All Pools
+curl -X POST "https://api.cow.fi/1/yield/pools" \
+  -H "Content-Type: application/json" \
+  -d '[]'
+```
+
+```bash cURL - Specific Pools
+curl -X POST "https://api.cow.fi/1/yield/pools" \
+  -H "Content-Type: application/json" \
+  -d '["0x1234567890abcdef1234567890abcdef12345678", "0xabcdef1234567890abcdef1234567890abcdef12"]'
+```
+
+```javascript JavaScript
+// Fetch all pools
+const response = await fetch(
+  'https://api.cow.fi/1/yield/pools',
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify([])
+  }
+);
+const pools = await response.json();
+
+// Fetch specific pools
+const poolAddresses = [
+  '0x1234567890abcdef1234567890abcdef12345678',
+  '0xabcdef1234567890abcdef1234567890abcdef12'
+];
+
+const response2 = await fetch(
+  'https://api.cow.fi/1/yield/pools',
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(poolAddresses)
+  }
+);
+const specificPools = await response2.json();
+```
+
+```python Python
+import requests
+import json
+
+# Fetch all pools
+response = requests.post(
+    'https://api.cow.fi/1/yield/pools',
+    headers={'Content-Type': 'application/json'},
+    data=json.dumps([])
+)
+pools = response.json()
+
+# Fetch specific pools
+pool_addresses = [
+    '0x1234567890abcdef1234567890abcdef12345678',
+    '0xabcdef1234567890abcdef1234567890abcdef12'
+]
+
+response = requests.post(
+    'https://api.cow.fi/1/yield/pools',
+    headers={'Content-Type': 'application/json'},
+    data=json.dumps(pool_addresses)
+)
+specific_pools = response.json()
+```
+</CodeGroup>
+
+Retrieves detailed information about liquidity pools including APR, TVL, volume, and fee data.
+
+**Endpoint:** `POST /{chainId}/yield/pools`
+
+### Path Parameters
+
+<ParamField path="chainId" type="string" required>
+  The blockchain network ID (e.g., `1`, `100`)
+</ParamField>
+
+### Request Body
+
+Array of pool addresses to query. Pass an empty array `[]` to fetch all available pools.
+
+<ParamField body="[]" type="array">
+  Array of pool contract addresses (Ethereum addresses)
+  
+  - Empty array: Returns all pools (up to result limit)
+  - With addresses: Returns only specified pools
+  - Maximum: 1000 pool addresses
+</ParamField>
+
+### Response
+
+Returns an array of pool information objects:
+
+<ResponseField name="contract_address" type="string" required>
+  Pool contract address
+</ResponseField>
+
+<ResponseField name="chain_id" type="number" required>
+  Blockchain network ID
+</ResponseField>
+
+<ResponseField name="project" type="string" required>
+  Liquidity provider / DEX protocol name (e.g., "Uniswap V3", "Balancer", "Curve")
+</ResponseField>
+
+<ResponseField name="apr" type="number" required>
+  Annual Percentage Rate for liquidity providers
+</ResponseField>
+
+<ResponseField name="fee" type="number" required>
+  Pool fee tier as a percentage (e.g., 0.3 for 0.3% fee)
+</ResponseField>
+
+<ResponseField name="tvl" type="number" required>
+  Total Value Locked in USD
+</ResponseField>
+
+<ResponseField name="volume" type="number" required>
+  Trading volume in the last 24 hours (in USD)
+</ResponseField>
+
+### Response Example
+
+```json 200 - Success
+[
+  {
+    "contract_address": "0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8",
+    "chain_id": 1,
+    "project": "Uniswap V3",
+    "apr": 12.45,
+    "fee": 0.3,
+    "tvl": 45678901.23,
+    "volume": 5678901.45
+  },
+  {
+    "contract_address": "0x06df3b2bbb68adc8b0e302443692037ed9f91b42",
+    "chain_id": 1,
+    "project": "Balancer",
+    "apr": 8.76,
+    "fee": 0.25,
+    "tvl": 12345678.90,
+    "volume": 987654.32
+  }
+]
+```
+
+```json 400 - Bad Request
+{
+  "message": "Error description"
+}
+```
+
+---
+
+## Get Average APR by Project
+
+<CodeGroup>
+```bash cURL
+curl "https://api.cow.fi/1/yield/pools-average-apr"
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://api.cow.fi/1/yield/pools-average-apr'
+);
+const averageAprs = await response.json();
+console.log(averageAprs);
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://api.cow.fi/1/yield/pools-average-apr'
+)
+average_aprs = response.json()
+print(average_aprs)
+```
+</CodeGroup>
+
+Retrieves the average APR for each liquidity provider/DEX protocol.
+
+**Endpoint:** `GET /{chainId}/yield/pools-average-apr`
+
+### Path Parameters
+
+<ParamField path="chainId" type="string" required>
+  The blockchain network ID (e.g., `1`, `100`)
+</ParamField>
+
+### Response
+
+Returns an object mapping project names to their average APR:
+
+```typescript
+{
+  [projectName: string]: number
+}
+```
+
+<ResponseField name="[projectName]" type="number">
+  Average APR for the project (as a percentage)
+</ResponseField>
+
+### Response Example
+
+```json 200 - Success
+{
+  "Uniswap V3": 15.234567,
+  "Balancer": 12.456789,
+  "Curve": 8.901234,
+  "Sushiswap": 10.123456,
+  "CoW AMM": 18.567890
+}
+```
+
+```json 400 - Bad Request
+{
+  "message": "Error description"
+}
+```
+
+---
+
+## Notes
+
+### Supported DEX Protocols
+
+The API aggregates data from multiple liquidity providers:
+
+- **Uniswap V2/V3**: Concentrated liquidity pools
+- **Balancer**: Weighted and stable pools
+- **Curve**: Stablecoin and wrapped token pools
+- **Sushiswap**: AMM pools
+- **CoW AMM**: Native CoW Protocol liquidity
+- Others: Additional DEX protocols based on availability
+
+### APR Calculation
+
+APR (Annual Percentage Rate) represents the yield liquidity providers earn:
+
+- **Fee income**: Trading fees collected by the pool
+- **Incentives**: Token rewards (if applicable)
+- **Time period**: Calculated over rolling time windows
+- **Precision**: Rounded to 6 decimal places
+
+**Example:**
+```json
+{
+  "apr": 12.456789  // 12.46% annual yield
+}
+```
+
+### TVL and Volume
+
+Both metrics are denominated in USD:
+
+- **TVL**: Snapshot of current liquidity
+- **Volume**: 24-hour rolling trading volume
+- **Updated**: Data is refreshed periodically from sources
+
+### Result Limit
+
+The pools endpoint has a maximum result limit of **1000 pools**. When fetching all pools (empty array), results are limited to the top pools by TVL or another ranking metric.
+
+### Caching
+
+**Pools Average APR**: Cached for **6 hours** (21,600 seconds)
+
+```
+Cache-Control: public, max-age=21600
+```
+
+**Pools Info**: Queries are cached at the database level for performance
+
+### Database Requirement
+
+Yield endpoints require database access. If the database is disabled:
+
+```json
+{
+  "message": "Service unavailable"
+}
+```
+
+The API logs a warning: `Database is disabled. /pools endpoint will not be available`
+
+### Project Name Normalization
+
+Project names are normalized by removing double quotes:
+
+```javascript
+// Raw: ""Uniswap V3""
+// Normalized: "Uniswap V3"
+```
+
+### Filtering Pools
+
+To find pools by criteria:
+
+```javascript
+// Fetch all pools
+const response = await fetch('https://api.cow.fi/1/yield/pools', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify([])
+});
+const allPools = await response.json();
+
+// Filter by TVL
+const highTvlPools = allPools.filter(pool => pool.tvl > 10000000);
+
+// Filter by APR
+const highYieldPools = allPools.filter(pool => pool.apr > 15);
+
+// Filter by project
+const uniswapPools = allPools.filter(pool => pool.project === 'Uniswap V3');
+```
+
+### Fee Tiers
+
+Common fee tiers by protocol:
+
+| Protocol | Fee Tiers | Description |
+|----------|-----------|-------------|
+| Uniswap V3 | 0.01%, 0.05%, 0.3%, 1% | Multiple tier options |
+| Balancer | Variable | Dynamic fees |
+| Curve | 0.04% typical | Low fees for stables |
+| Sushiswap | 0.3% | Fixed fee |
+
+### Use Cases
+
+**1. Yield Comparison Dashboard**
+```javascript
+const aprs = await fetch('https://api.cow.fi/1/yield/pools-average-apr')
+  .then(r => r.json());
+
+// Display average yields by protocol
+Object.entries(aprs).forEach(([protocol, apr]) => {
+  console.log(`${protocol}: ${apr.toFixed(2)}%`);
+});
+```
+
+**2. Pool Selection for Liquidity**
+```javascript
+const pools = await fetch('https://api.cow.fi/1/yield/pools', {
+  method: 'POST',
+  body: JSON.stringify([])
+}).then(r => r.json());
+
+// Find best pool by APR/TVL ratio
+const scoredPools = pools.map(p => ({
+  ...p,
+  score: p.apr / Math.log(p.tvl)
+})).sort((a, b) => b.score - a.score);
+
+console.log('Best pool:', scoredPools[0]);
+```
+
+**3. Monitor Specific Pools**
+```javascript
+const myPoolAddresses = [
+  '0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8',
+  '0x06df3b2bbb68adc8b0e302443692037ed9f91b42'
+];
+
+const myPools = await fetch('https://api.cow.fi/1/yield/pools', {
+  method: 'POST',
+  body: JSON.stringify(myPoolAddresses)
+}).then(r => r.json());
+
+myPools.forEach(pool => {
+  console.log(`${pool.project}: APR ${pool.apr}%, TVL $${pool.tvl.toLocaleString()}`);
+});
+```
+
+### Supported Networks
+
+- **Ethereum Mainnet (1)**: Full pool data availability
+- **Gnosis Chain (100)**: Limited to protocols deployed on Gnosis
+- Other networks: Check availability
+
+### Data Sources
+
+Pool data is aggregated from:
+- On-chain indexing
+- DEX protocol APIs
+- Price oracles for TVL/volume USD values
+- Historical data for APR calculations
+
+### Best Practices
+
+1. **Cache appropriately**: Respect cache headers to reduce load
+2. **Batch queries**: Request multiple pools in a single call
+3. **Handle missing data**: Some pools may have incomplete information
+4. **Consider impermanent loss**: APR doesn't account for IL
+5. **Verify data**: Cross-reference with protocol interfaces for critical decisions

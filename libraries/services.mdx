@@ -1,0 +1,590 @@
+---
+title: 'Services'
+description: 'Business logic services for the CoW Protocol BFF'
+---
+
+The services library provides high-level business logic that orchestrates repositories and implements core application features. Services follow a clean architecture pattern, depending on repository interfaces rather than implementations.
+
+## Architecture
+
+Services implement these patterns:
+
+- **Single Responsibility**: Each service handles one domain
+- **Dependency Injection**: Uses InversifyJS with Symbol-based identifiers
+- **Repository Composition**: Orchestrates multiple repositories
+- **Type Safety**: Full TypeScript interfaces and type definitions
+
+## Core Services
+
+### USD Service
+
+Provides USD price information for tokens across different chains.
+
+<ParamField path="chainIdOrSlug" type="string" required>
+  Chain identifier (e.g., "mainnet", "gnosis", "arbitrum_one")
+</ParamField>
+
+<ParamField path="tokenAddress" type="string">
+  Token contract address (optional for native currency)
+</ParamField>
+
+<ResponseField name="price" type="number | null">
+  Current USD price, or null if unavailable
+</ResponseField>
+
+#### Implementation
+
+```typescript
+import { UsdService, usdServiceSymbol } from '@cowprotocol/services';
+import { SupportedChainId } from '@cowprotocol/cow-sdk';
+
+// Get current USDC price on mainnet
+const price = await usdService.getUsdPrice(
+  'mainnet',
+  '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+);
+
+// Get native token price (ETH on mainnet)
+const ethPrice = await usdService.getUsdPrice('mainnet');
+```
+
+The service delegates to the `UsdRepository`, which implements fallback strategies across multiple data sources (CoinGecko → CoW Protocol API).
+
+### Slippage Service
+
+Calculates dynamic slippage tolerance based on token volatility and market conditions.
+
+<ParamField path="chainId" type="SupportedChainId" required>
+  The blockchain network ID
+</ParamField>
+
+<ParamField path="quoteTokenAddress" type="string" required>
+  Token being quoted (received)
+</ParamField>
+
+<ParamField path="baseTokenAddress" type="string" required>
+  Token being sold
+</ParamField>
+
+<ParamField path="order" type="OrderForSlippageCalculation">
+  Optional order details for more precise calculation
+</ParamField>
+
+<ResponseField name="slippageBps" type="number">
+  Recommended slippage in basis points (e.g., 50 = 0.5%)
+</ResponseField>
+
+<ResponseField name="volatilityDetails" type="VolatilityDetails">
+  Token volatility metrics and price history
+</ResponseField>
+
+<ResponseField name="pairVolatility" type="PairVolatility">
+  Combined volatility for the trading pair
+</ResponseField>
+
+#### Order Context
+
+Providing order details enables more accurate slippage calculation:
+
+```typescript
+interface OrderForSlippageCalculation {
+  orderKind: 'buy' | 'sell';
+  partiallyFillable: boolean;
+  sellAmount: string;
+  buyAmount: string;
+  expirationTimeInSeconds: number;
+}
+```
+
+#### Usage Example
+
+```typescript
+import { SlippageService, slippageServiceSymbol } from '@cowprotocol/services';
+import { SupportedChainId } from '@cowprotocol/cow-sdk';
+
+// Get recommended slippage for a trading pair
+const slippageBps = await slippageService.getSlippageBps({
+  chainId: SupportedChainId.MAINNET,
+  quoteTokenAddress: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC
+  baseTokenAddress: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',  // WETH
+  order: {
+    orderKind: 'sell',
+    partiallyFillable: false,
+    sellAmount: '1000000000000000000', // 1 ETH
+    buyAmount: '2000000000',             // 2000 USDC
+    expirationTimeInSeconds: 1800         // 30 minutes
+  }
+});
+
+console.log(`Recommended slippage: ${slippageBps / 100}%`);
+
+// Get detailed volatility for a single token
+const volatility = await slippageService.getVolatilityDetails(
+  SupportedChainId.MAINNET,
+  '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
+);
+
+if (volatility) {
+  console.log(`Token: ${volatility.tokenAddress}`);
+  console.log(`Current Price: $${volatility.usdPrice}`);
+  console.log(`Volatility (USD): ${volatility.volatilityInUsd}`);
+  console.log(`Price Points: ${volatility.prices?.length}`);
+}
+
+// Get combined volatility for a trading pair
+const pairVolatility = await slippageService.getVolatilityForPair(
+  SupportedChainId.MAINNET,
+  '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',  // WETH
+  '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'   // USDC
+);
+```
+
+### Simulation Service
+
+Simulates transaction bundles before execution using Tenderly.
+
+<ParamField path="chainId" type="SupportedChainId" required>
+  The blockchain network ID
+</ParamField>
+
+<ParamField path="simulationInput" type="SimulationInput[]" required>
+  Array of transactions to simulate as a bundle
+</ParamField>
+
+<ResponseField name="status" type="boolean">
+  Whether all transactions in the bundle succeeded
+</ResponseField>
+
+<ResponseField name="link" type="string">
+  Tenderly dashboard URL for detailed simulation results
+</ResponseField>
+
+<ResponseField name="gasUsed" type="string">
+  Total gas consumed by the bundle
+</ResponseField>
+
+<ResponseField name="cumulativeBalancesDiff" type="Record<string, Record<string, string>>">
+  Net balance changes per address and token
+</ResponseField>
+
+#### Simulation Input
+
+```typescript
+interface SimulationInput {
+  input: string;      // Encoded transaction data
+  from: string;       // Sender address
+  to: string;         // Contract or recipient address
+  value?: string;     // Native token value (optional)
+  gas?: number;       // Gas limit (optional)
+  gas_price?: string; // Gas price (optional)
+}
+```
+
+#### Usage Example
+
+```typescript
+import { SimulationService, simulationServiceSymbol } from '@cowprotocol/services';
+import { SupportedChainId } from '@cowprotocol/cow-sdk';
+
+const results = await simulationService.postTenderlyBundleSimulation(
+  SupportedChainId.MAINNET,
+  [
+    {
+      from: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+      to: '0x9008D19f58AAbD9eD0D60971565AA8510560ab41',
+      input: '0x...',  // ERC20 approve
+      value: '0'
+    },
+    {
+      from: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+      to: '0x9008D19f58AAbD9eD0D60971565AA8510560ab41',
+      input: '0x...',  // CoW Protocol swap
+      value: '0'
+    }
+  ]
+);
+
+if (results) {
+  console.log(`Simulation: ${results[0].status ? 'Success' : 'Failed'}`);
+  console.log(`View details: ${results[0].link}`);
+  console.log(`Gas used: ${results[0].gasUsed}`);
+  
+  // Analyze balance changes
+  for (const [address, tokens] of Object.entries(results[0].cumulativeBalancesDiff)) {
+    console.log(`Address ${address}:`);
+    for (const [token, diff] of Object.entries(tokens)) {
+      console.log(`  Token ${token}: ${diff}`);
+    }
+  }
+}
+```
+
+### Token Holder Service
+
+Retrieves top token holders for analytics and tracking.
+
+<ParamField path="chainId" type="SupportedChainId" required>
+  The blockchain network ID
+</ParamField>
+
+<ParamField path="tokenAddress" type="string" required>
+  Token contract address
+</ParamField>
+
+<ResponseField name="holders" type="TokenHolderPoint[]">
+  Array of top holders with addresses and balances
+</ResponseField>
+
+#### Usage Example
+
+```typescript
+import { TokenHolderService, tokenHolderServiceSymbol } from '@cowprotocol/services';
+
+const topHolders = await tokenHolderService.getTopTokenHolders(
+  SupportedChainId.MAINNET,
+  '0xDEf1CA1fb7FBcDC777520aa7f396b4E015F497aB' // CoW Protocol token
+);
+
+if (topHolders) {
+  topHolders.forEach((holder, index) => {
+    console.log(`${index + 1}. ${holder.address}: ${holder.balance}`);
+  });
+}
+```
+
+### Token Balances Service
+
+Fetches multiple token balances for a user in a single call.
+
+<ParamField path="chainId" type="SupportedChainId" required>
+  The blockchain network ID
+</ParamField>
+
+<ParamField path="userAddress" type="string" required>
+  User wallet address
+</ParamField>
+
+<ParamField path="tokenAddresses" type="string[]" required>
+  Array of token contract addresses
+</ParamField>
+
+<ResponseField name="balances" type="Record<string, string>">
+  Map of token addresses to balance strings
+</ResponseField>
+
+#### Usage Example
+
+```typescript
+const balances = await tokenBalancesService.getBalances(
+  SupportedChainId.MAINNET,
+  '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+  [
+    '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC
+    '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', // WETH
+    '0xDEf1CA1fb7FBcDC777520aa7f396b4E015F497aB'  // COW
+  ]
+);
+```
+
+### Hooks Service
+
+Retrieves CoW Hooks execution data from Dune Analytics.
+
+<ParamField path="blockchain" type="Blockchain" required>
+  One of: 'mainnet', 'arbitrum', 'avalanche', 'base', 'gnosis', 'polygon'
+</ParamField>
+
+<ParamField path="period" type="Period" required>
+  Time period: 'last 3h', 'last 1d', 'last 7d', 'last 30d', 'last 3m', 'last 6m', 'last 12m'
+</ParamField>
+
+<ParamField path="maxWaitTimeMs" type="number">
+  Maximum wait time for Dune query execution (default: 60000)
+</ParamField>
+
+<ParamField path="limit" type="number">
+  Maximum number of results to return
+</ParamField>
+
+<ParamField path="offset" type="number">
+  Number of results to skip (for pagination)
+</ParamField>
+
+<ResponseField name="hooks" type="HookData[]">
+  Array of hook execution records
+</ResponseField>
+
+#### Hook Data Structure
+
+```typescript
+interface HookData {
+  environment: string;                    // Execution environment
+  block_time: string;                     // Block timestamp
+  is_bridging: boolean;                   // Whether hook performs bridging
+  success: boolean;                       // Execution success status
+  app_code: string;                       // Application identifier
+  destination_chain_id: number | null;    // Target chain for bridging
+  destination_token_address: string | null; // Target token address
+  hook_type: string;                      // Type of hook
+  app_id: string | null;                  // Application ID
+  target: string;                         // Hook contract address
+  gas_limit: number;                      // Gas limit for execution
+  app_hash: string;                       // Application hash
+  tx_hash: string;                        // Transaction hash
+}
+```
+
+#### Usage Example
+
+```typescript
+import { HooksService, hooksServiceSymbol } from '@cowprotocol/services';
+
+const hooks = await hooksService.getHooks({
+  blockchain: 'mainnet',
+  period: 'last 7d',
+  limit: 100
+});
+
+hooks.forEach(hook => {
+  console.log(`Hook: ${hook.hook_type}`);
+  console.log(`Status: ${hook.success ? 'Success' : 'Failed'}`);
+  console.log(`Gas: ${hook.gas_limit}`);
+  console.log(`Tx: ${hook.tx_hash}`);
+});
+```
+
+### Balance Tracking Service
+
+Real-time monitoring of user token balances and allowances with Server-Sent Events (SSE).
+
+<ParamField path="chainId" type="SupportedChainId" required>
+  The blockchain network ID
+</ParamField>
+
+<ParamField path="userAddress" type="string" required>
+  User wallet address to track
+</ParamField>
+
+<ParamField path="tokenAddresses" type="string[]" required>
+  Array of token addresses to monitor
+</ParamField>
+
+#### Events
+
+The service emits two types of events:
+
+**Balance Change Event**
+```typescript
+interface BalanceChangeEvent {
+  type: 'balance_change';
+  chainId: SupportedChainId;
+  timestamp: number;
+  userAddress: string;
+  tokenAddress: string;
+  oldBalance: string;
+  newBalance: string;
+}
+```
+
+**Allowance Change Event**
+```typescript
+interface AllowanceChangeEvent {
+  type: 'allowance_change';
+  chainId: SupportedChainId;
+  timestamp: number;
+  userAddress: string;
+  tokenAddress: string;
+  oldAllowance: string;
+  newAllowance: string;
+}
+```
+
+#### Usage Example
+
+```typescript
+import { BalanceTrackingService, balanceTrackingServiceSymbol } from '@cowprotocol/services';
+
+// Start tracking
+await balanceTrackingService.startTrackingUser({
+  chainId: SupportedChainId.MAINNET,
+  userAddress: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+  tokenAddresses: [
+    '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC
+    '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'  // WETH
+  ]
+});
+
+// Listen for changes
+balanceTrackingService.onBalanceChange((event) => {
+  if (event.type === 'balance_change') {
+    console.log(`Balance changed: ${event.tokenAddress}`);
+    console.log(`  Old: ${event.oldBalance}`);
+    console.log(`  New: ${event.newBalance}`);
+  } else if (event.type === 'allowance_change') {
+    console.log(`Allowance changed: ${event.tokenAddress}`);
+    console.log(`  Old: ${event.oldAllowance}`);
+    console.log(`  New: ${event.newAllowance}`);
+  }
+});
+
+// Update tracked tokens
+await balanceTrackingService.updateTrackedTokens(
+  SupportedChainId.MAINNET,
+  '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+  ['0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'] // Now only USDC
+);
+
+// Stop tracking
+await balanceTrackingService.stopTrackingUser(
+  SupportedChainId.MAINNET,
+  '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'
+);
+```
+
+### SSE Service
+
+Manages Server-Sent Events connections for real-time updates.
+
+<ParamField path="clientId" type="string" required>
+  Unique client identifier
+</ParamField>
+
+<ParamField path="response" type="Response" required>
+  HTTP response object for SSE stream
+</ParamField>
+
+#### Usage Example
+
+```typescript
+import { SSEService, sseServiceSymbol } from '@cowprotocol/services';
+
+// Register SSE client
+const client = await sseService.addClient(
+  'user-123',
+  response // HTTP response object
+);
+
+// Send event to specific client
+await sseService.sendToClient('user-123', {
+  type: 'balance_update',
+  data: { token: '0x...', balance: '1000000' }
+});
+
+// Broadcast to all clients
+await sseService.broadcast({
+  type: 'system_notification',
+  message: 'Service maintenance in 10 minutes'
+});
+
+// Remove client
+await sseService.removeClient('user-123');
+```
+
+### Affiliate Stats Service
+
+Retrieves affiliate program statistics from Dune Analytics.
+
+<ParamField path="affiliateId" type="string" required>
+  Affiliate identifier
+</ParamField>
+
+<ParamField path="period" type="Period" required>
+  Time period for statistics
+</ParamField>
+
+<ResponseField name="stats" type="AffiliateStats">
+  Aggregated affiliate performance metrics
+</ResponseField>
+
+### Affiliate Program Export Service
+
+Exports affiliate program data in various formats (CSV, JSON).
+
+<ParamField path="format" type="'csv' | 'json'" required>
+  Export format
+</ParamField>
+
+<ParamField path="startDate" type="Date">
+  Start date for export range
+</ParamField>
+
+<ParamField path="endDate" type="Date">
+  End date for export range
+</ParamField>
+
+<ResponseField name="data" type="string | object">
+  Exported affiliate data
+</ResponseField>
+
+## Factory Functions
+
+The `factories.ts` module provides factory functions that wire up services with their dependencies:
+
+```typescript
+import {
+  getCacheRepository,
+  getErc20Repository,
+  getUsdRepository,
+  getTokenHolderRepository,
+  getUserBalanceRepository,
+  getSimulationRepository
+} from '@cowprotocol/services';
+
+// These functions handle all repository setup and configuration
+const cache = getCacheRepository();           // Redis or memory
+const erc20Repo = getErc20Repository(cache);  // With caching
+const usdRepo = getUsdRepository(cache, erc20Repo); // With fallbacks
+```
+
+## Dependency Injection Setup
+
+Services use InversifyJS for dependency injection:
+
+```typescript
+import { Container } from 'inversify';
+import {
+  UsdService,
+  UsdServiceMain,
+  usdServiceSymbol,
+  SlippageService,
+  SlippageServiceMain,
+  slippageServiceSymbol
+} from '@cowprotocol/services';
+
+const container = new Container();
+
+// Bind services to their implementations
+container.bind<UsdService>(usdServiceSymbol).to(UsdServiceMain);
+container.bind<SlippageService>(slippageServiceSymbol).to(SlippageServiceMain);
+
+// Resolve services
+const usdService = container.get<UsdService>(usdServiceSymbol);
+const slippageService = container.get<SlippageService>(slippageServiceSymbol);
+```
+
+## Service Symbols
+
+All services export a Symbol for dependency injection:
+
+```typescript
+export const usdServiceSymbol = Symbol.for('UsdService');
+export const slippageServiceSymbol = Symbol.for('SlippageService');
+export const simulationServiceSymbol = Symbol.for('SimulationServiceSymbol');
+export const tokenHolderServiceSymbol = Symbol.for('TokenHolderService');
+export const balanceTrackingServiceSymbol = Symbol.for('BalanceTrackingService');
+export const sseServiceSymbol = Symbol.for('SSEService');
+export const hooksServiceSymbol = Symbol.for('HooksService');
+```
+
+## Best Practices
+
+1. **Use dependency injection** for all service instantiation
+2. **Inject interfaces, not implementations** for flexibility and testing
+3. **Handle null responses** from repositories gracefully
+4. **Leverage factory functions** for consistent configuration
+5. **Use type assertions** with Dune queries for type safety
+6. **Set reasonable timeouts** for external service calls
+7. **Log errors** but don't expose sensitive information
+8. **Cache aggressively** at the repository level, not in services
+9. **Emit typed events** for real-time features like balance tracking
+10. **Document service contracts** with clear interfaces and examples

@@ -1,0 +1,318 @@
+---
+title: Development Environment Setup
+description: Complete guide to setting up your local development environment for CoW Protocol BFF
+---
+
+This guide will help you set up your local development environment to work on the CoW Protocol Backend For Frontend (BFF) services.
+
+## Prerequisites
+
+<Steps>
+  <Step title="Install Node.js">
+    The project uses Node.js 20.x. Install it using one of these methods:
+
+    ```bash
+    # Using nvm (recommended)
+    nvm install 20
+    nvm use 20
+
+    # Verify installation
+    node --version  # Should be v20.x.x
+    ```
+  </Step>
+
+  <Step title="Install Yarn">
+    The project uses Yarn as its package manager:
+
+    ```bash
+    npm install -g yarn
+
+    # Verify installation
+    yarn --version
+    ```
+  </Step>
+
+  <Step title="Install Docker">
+    Docker is required for running databases, queues, and other services:
+
+    - **Mac**: [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/)
+    - **Linux**: [Docker Engine for Linux](https://docs.docker.com/engine/install/)
+    - **Windows**: [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/)
+
+    Verify Docker is running:
+
+    ```bash
+    docker --version
+    docker-compose --version
+    ```
+  </Step>
+</Steps>
+
+## Initial Setup
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/cowprotocol/bff.git
+    cd bff
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    ```bash
+    yarn
+    ```
+
+    This will also automatically run `yarn gen:types` via the `postinstall` hook to generate TypeScript types from Swagger definitions.
+  </Step>
+
+  <Step title="Configure environment variables">
+    Create environment files based on the examples provided:
+
+    <CodeGroup>
+      ```bash Local development (without Docker)
+      cp .env.example .env
+      ```
+
+      ```bash Docker development
+      cp .env.example .env.docker
+      ```
+    </CodeGroup>
+
+    Key environment variables to configure:
+
+    ```bash .env
+    # RPC URLs for blockchain networks
+    RPC_URL_1=https://mainnet.infura.io/v3/your-infura-key
+    RPC_URL_100=https://rpc.gnosischain.com
+    RPC_URL_42161=wss://arbitrum-mainnet.io/ws/v3/your-infura-key
+
+    # Database
+    DATABASE_ENABLED=true
+    DATABASE_HOST=localhost
+    DATABASE_USERNAME=bff-db-user
+    DATABASE_PASSWORD=bff-db-password
+    DATABASE_NAME=bff-db
+    DATABASE_PORT=5432
+
+    # Redis (optional)
+    REDIS_ENABLED=true
+    REDIS_HOST=localhost
+    REDIS_PORT=6379
+
+    # RabbitMQ (for notifications)
+    QUEUE_USER=rabbit
+    QUEUE_PASSWORD=my-rabbit-password
+    QUEUE_HOST=localhost
+    QUEUE_PORT=5672
+    ```
+  </Step>
+
+  <Step title="Start infrastructure services">
+    Start all required Docker services:
+
+    ```bash
+    yarn compose:up
+    ```
+
+    This command will:
+    1. Build affected Docker containers
+    2. Start all services defined in `docker-compose.yml`
+
+    Or start individual services:
+
+    <CodeGroup>
+      ```bash Database only
+      docker-compose up -d db
+      ```
+
+      ```bash RabbitMQ only
+      docker-compose up -d queue
+      ```
+
+      ```bash Redis only
+      docker-compose up -d redis
+      ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Run database migrations">
+    After starting the database, run migrations:
+
+    ```bash
+    yarn migration:run
+    ```
+  </Step>
+</Steps>
+
+## Development Workflow
+
+### Running Services
+
+<CodeGroup>
+  ```bash API Server
+  yarn start
+  # or
+  yarn start:api
+  # Runs at http://localhost:1500
+  ```
+
+  ```bash Notification Producer
+  yarn producer
+  ```
+
+  ```bash Telegram Consumer
+  yarn telegram
+  ```
+</CodeGroup>
+
+### Running Specific Services
+
+The project uses NX for monorepo management. You can run any service directly:
+
+```bash
+# Start a specific app
+nx run <app-name>:start
+
+# Example: Start the API
+nx run api:start
+```
+
+### Building the Project
+
+<CodeGroup>
+  ```bash Build all projects
+  yarn build
+  # or
+  nx run-many --all --target=build
+  ```
+
+  ```bash Build specific project
+  nx run <project-name>:build
+  ```
+</CodeGroup>
+
+### Docker Development
+
+Build Docker containers for affected projects:
+
+```bash
+yarn docker-build:affected
+```
+
+This uses NX to intelligently build only the containers that have changed.
+
+## Project Structure
+
+The BFF uses an NX monorepo structure:
+
+```
+bff/
+├── apps/              # Application services
+│   ├── api/           # Main API service (Fastify)
+│   ├── telegram/      # Telegram notification consumer
+│   ├── notification-producer/
+│   └── twap/          # TWAP service
+├── libs/              # Shared libraries
+│   ├── repositories/  # Data access layer
+│   ├── services/      # Business logic
+│   ├── shared/        # Common utilities
+│   ├── notifications/ # Notification logic
+│   └── abis/          # Smart contract ABIs
+├── jest.config.ts     # Root Jest configuration
+├── nx.json            # NX workspace configuration
+└── tsconfig.base.json # Base TypeScript config
+```
+
+## Configuration Files
+
+### TypeScript Configuration
+
+The project uses a base TypeScript configuration (`tsconfig.base.json`) with path aliases:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "esnext",
+    "strict": true,
+    "paths": {
+      "@cowprotocol/abis": ["libs/abis/src/index.ts"],
+      "@cowprotocol/notifications": ["libs/notifications/src/index.ts"],
+      "@cowprotocol/repositories": ["libs/repositories/src/index.ts"],
+      "@cowprotocol/services": ["libs/services/src/index.ts"],
+      "@cowprotocol/shared": ["libs/shared/src/index.ts"]
+    }
+  }
+}
+```
+
+### Code Style
+
+The project uses ESLint and Prettier for code formatting:
+
+```json .prettierrc
+{
+  "singleQuote": true
+}
+```
+
+ESLint is configured with NX plugins and TypeScript rules.
+
+## Troubleshooting
+
+### TypeORM `DriverPackageNotInstalledError`
+
+If you encounter this error:
+
+```
+DriverPackageNotInstalledError: Postgres package has not been found installed.
+```
+
+This is usually resolved by ensuring `pg` is properly installed:
+
+```bash
+yarn add pg
+```
+
+See [PR #101](https://github.com/cowprotocol/bff/pull/101) for more details.
+
+### Port Already in Use
+
+If a service fails to start because a port is in use:
+
+```bash
+# Find the process using the port
+lsof -i :3000
+
+# Kill the process
+kill -9 <PID>
+```
+
+### Docker Issues
+
+```bash
+# Reset Docker containers
+docker-compose down -v
+yarn compose:up
+
+# View logs
+docker-compose logs -f <service-name>
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Creating Services" icon="plus" href="/development/creating-services">
+    Learn how to create new services and libraries
+  </Card>
+  <Card title="Testing" icon="flask" href="/development/testing">
+    Write and run tests for your code
+  </Card>
+  <Card title="Database Migrations" icon="database" href="/development/database-migrations">
+    Manage database schema changes
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/architecture/overview">
+    Understand the system architecture
+  </Card>
+</CardGroup>

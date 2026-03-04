@@ -1,0 +1,183 @@
+---
+title: Token Endpoints
+description: Endpoints for retrieving token information, pricing, and holder data
+---
+
+Token endpoints provide information about ERC-20 tokens on supported networks.
+
+## Get Token USD Price
+
+<CodeGroup>
+```bash cURL
+curl https://api.cow.fi/1/tokens/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/usdPrice
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://api.cow.fi/1/tokens/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/usdPrice'
+);
+const data = await response.json();
+console.log(data.price);
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://api.cow.fi/1/tokens/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/usdPrice'
+)
+data = response.json()
+print(data['price'])
+```
+</CodeGroup>
+
+Retrieves the current USD price for a specified token.
+
+**Endpoint:** `GET /{chainId}/tokens/{tokenAddress}/usdPrice`
+
+### Path Parameters
+
+<ParamField path="chainId" type="string" required>
+  The blockchain network ID or slug (e.g., `1`, `mainnet`, `100`, `gnosis`)
+</ParamField>
+
+<ParamField path="tokenAddress" type="string" required>
+  The token contract address in checksummed or lowercase format. Use `-` for the native token (ETH, xDAI, etc.)
+</ParamField>
+
+### Response
+
+<ResponseField name="price" type="number" required>
+  Current price of the token in USD
+</ResponseField>
+
+### Response Example
+
+```json 200 - Success
+{
+  "price": 3561.1267842
+}
+```
+
+```json 404 - Not Found
+{
+  "message": "Price not found"
+}
+```
+
+---
+
+## Get Token Top Holders
+
+<CodeGroup>
+```bash cURL
+curl https://api.cow.fi/1/tokens/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/topHolders
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://api.cow.fi/1/tokens/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/topHolders'
+);
+const holders = await response.json();
+console.log(`Found ${holders.length} holders`);
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://api.cow.fi/1/tokens/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/topHolders'
+)
+holders = response.json()
+print(f"Found {len(holders)} holders")
+```
+</CodeGroup>
+
+Retrieves a list of the top token holders for a specified token.
+
+**Endpoint:** `GET /{chainId}/tokens/{tokenAddress}/topHolders`
+
+### Path Parameters
+
+<ParamField path="chainId" type="string" required>
+  The blockchain network ID (e.g., `1`, `100`, `11155111`)
+</ParamField>
+
+<ParamField path="tokenAddress" type="string" required>
+  The token contract address in checksummed or lowercase format
+</ParamField>
+
+### Response
+
+Returns an array of token holders.
+
+<ResponseField name="address" type="string" required>
+  Address of the token holder
+</ResponseField>
+
+<ResponseField name="balance" type="string" required>
+  Balance of the token holder in token units (wei-like format)
+</ResponseField>
+
+### Response Example
+
+```json 200 - Success
+[
+  {
+    "address": "0x1234567890abcdef1234567890abcdef12345678",
+    "balance": "1000000000000000000000"
+  },
+  {
+    "address": "0xabcdef1234567890abcdef1234567890abcdef12",
+    "balance": "500000000000000000000"
+  }
+]
+```
+
+```json 404 - Not Found
+{
+  "message": "Token holders not found"
+}
+```
+
+---
+
+## Notes
+
+### Native Token Pricing
+
+To get the price of the native token (ETH on Ethereum, xDAI on Gnosis), use `-` as the token address:
+
+```bash
+curl https://api.cow.fi/1/tokens/-/usdPrice
+```
+
+### Address Format
+
+Token addresses can be provided in either checksummed or lowercase format. The API normalizes addresses internally:
+
+- ✅ `0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2` (checksummed)
+- ✅ `0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2` (lowercase)
+
+### Caching
+
+Token price responses are cached for performance. Check the `Cache-Control` header to understand the caching behavior.
+
+### Supported Networks
+
+Token endpoints are available on all supported networks. However, data availability depends on third-party price oracles and indexers:
+
+- Ethereum Mainnet: Full support
+- Gnosis Chain: Full support
+- Sepolia: Limited support (testnet)
+
+### Error Handling
+
+Common error scenarios:
+
+| Status Code | Reason | Solution |
+|------------|--------|----------|
+| 404 | Token not found | Verify the token address and chain ID |
+| 404 | Price not available | Token may not have price data from oracles |
+| 400 | Invalid address format | Ensure address is a valid Ethereum address |
+| 500 | Internal server error | Retry the request after a short delay |

@@ -1,0 +1,357 @@
+---
+title: Simulation Endpoints
+description: Endpoints for simulating transaction bundles using Tenderly
+---
+
+Simulation endpoints allow you to simulate transaction bundles before executing them on-chain, providing insight into state changes, balance diffs, and gas consumption.
+
+## Simulate Transaction Bundle
+
+<CodeGroup>
+```bash cURL
+curl -X POST "https://api.cow.fi/1/simulation/simulateBundle" \
+  -H "Content-Type: application/json" \
+  -d '[
+    {
+      "from": "0x1234567890abcdef1234567890abcdef12345678",
+      "to": "0xabcdef1234567890abcdef1234567890abcdef12",
+      "input": "0xa9059cbb000000000000000000000000...",
+      "value": "0"
+    }
+  ]'
+```
+
+```javascript JavaScript
+const transactions = [
+  {
+    from: '0x1234567890abcdef1234567890abcdef12345678',
+    to: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+    input: '0xa9059cbb000000000000000000000000abcdef1234567890abcdef1234567890abcdef120000000000000000000000000000000000000000000000000de0b6b3a7640000',
+    value: '0',
+    gas: 100000,
+    gas_price: '30000000000'
+  }
+];
+
+const response = await fetch(
+  'https://api.cow.fi/1/simulation/simulateBundle',
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(transactions)
+  }
+);
+
+const results = await response.json();
+console.log('Simulation results:', results);
+```
+
+```python Python
+import requests
+import json
+
+transactions = [
+    {
+        'from': '0x1234567890abcdef1234567890abcdef12345678',
+        'to': '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+        'input': '0xa9059cbb000000000000000000000000abcdef1234567890abcdef1234567890abcdef120000000000000000000000000000000000000000000000000de0b6b3a7640000',
+        'value': '0',
+        'gas': 100000,
+        'gas_price': '30000000000'
+    }
+]
+
+response = requests.post(
+    'https://api.cow.fi/1/simulation/simulateBundle',
+    headers={'Content-Type': 'application/json'},
+    data=json.dumps(transactions)
+)
+
+results = response.json()
+print('Simulation results:', results)
+```
+</CodeGroup>
+
+Simulates a bundle of transactions using Tenderly and returns detailed execution information.
+
+**Endpoint:** `POST /{chainId}/simulation/simulateBundle`
+
+### Path Parameters
+
+<ParamField path="chainId" type="string" required>
+  The blockchain network ID (e.g., `1`, `100`, `11155111`)
+</ParamField>
+
+### Request Body
+
+An array of transaction objects to simulate:
+
+<ParamField body="from" type="string" required>
+  Address sending the transaction
+</ParamField>
+
+<ParamField body="to" type="string" required>
+  Address receiving the transaction (contract or EOA)
+</ParamField>
+
+<ParamField body="input" type="string" required>
+  Transaction data (encoded function call)
+</ParamField>
+
+<ParamField body="value" type="string">
+  Amount of native coin to send (in wei). Defaults to "0"
+</ParamField>
+
+<ParamField body="gas" type="number">
+  Transaction gas limit
+</ParamField>
+
+<ParamField body="gas_price" type="string">
+  Gas price in wei
+</ParamField>
+
+### Response
+
+Returns an array of simulation results, one for each transaction:
+
+<ResponseField name="status" type="boolean" required>
+  Whether the transaction was successful (`true`) or reverted (`false`)
+</ResponseField>
+
+<ResponseField name="id" type="string" required>
+  Tenderly simulation ID for this transaction
+</ResponseField>
+
+<ResponseField name="link" type="string" required>
+  URL to view the simulation on Tenderly dashboard
+</ResponseField>
+
+<ResponseField name="cumulativeBalancesDiff" type="object" required>
+  Object mapping addresses to their token balance changes
+  
+  Structure: `{ [address]: { [tokenAddress]: amountChange } }`
+</ResponseField>
+
+<ResponseField name="stateDiff" type="array">
+  Array of state changes that occurred during execution
+</ResponseField>
+
+<ResponseField name="stateDiff[].address" type="string">
+  Contract address where state change occurred
+</ResponseField>
+
+<ResponseField name="stateDiff[].soltype" type="object | null">
+  Solidity type information for the state variable
+</ResponseField>
+
+<ResponseField name="stateDiff[].original" type="string | object | null">
+  Original value before the state change
+</ResponseField>
+
+<ResponseField name="stateDiff[].dirty" type="string | object | null">
+  New value after the state change
+</ResponseField>
+
+<ResponseField name="stateDiff[].raw" type="array">
+  Raw state change details including storage slots
+</ResponseField>
+
+<ResponseField name="gasUsed" type="string">
+  Amount of gas used in the transaction (with decimals)
+</ResponseField>
+
+### Response Example
+
+```json 200 - Success
+[
+  {
+    "status": true,
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "link": "https://dashboard.tenderly.co/tx/mainnet/a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "cumulativeBalancesDiff": {
+      "0x1234567890abcdef1234567890abcdef12345678": {
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": "-1000000000000000000"
+      },
+      "0xabcdef1234567890abcdef1234567890abcdef12": {
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": "1000000000000000000"
+      }
+    },
+    "stateDiff": [
+      {
+        "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "soltype": {
+          "name": "_balances",
+          "type": "mapping(address => uint256)",
+          "storage_location": "storage",
+          "offset": 0,
+          "index": "0x1234567890abcdef1234567890abcdef12345678",
+          "indexed": false,
+          "components": null
+        },
+        "original": "5000000000000000000",
+        "dirty": "4000000000000000000",
+        "raw": [
+          {
+            "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+            "key": "0xabcdef...",
+            "original": "0x0000000000000000000000000000000000000000000000004563918244f40000",
+            "dirty": "0x0000000000000000000000000000000000000000000000003782dace9d900000"
+          }
+        ]
+      }
+    ],
+    "gasUsed": "65000"
+  }
+]
+```
+
+```json 400 - Bad Request
+{
+  "message": "Build simulation error"
+}
+```
+
+```json 500 - Internal Server Error
+{
+  "message": "Error in /simulateBundle"
+}
+```
+
+---
+
+## Notes
+
+### Transaction Bundle
+
+A bundle is an ordered array of transactions that are simulated sequentially. Each transaction in the bundle:
+
+1. Executes in the order provided
+2. Sees the state changes from previous transactions
+3. Can depend on previous transactions succeeding
+
+### Use Cases
+
+**Order Execution Simulation:**
+Simulate a CoW Protocol order execution to verify:
+- Sufficient balance and allowance
+- Expected token transfers
+- Price impact and slippage
+
+**Complex Interactions:**
+Test multi-step operations:
+- Approve + Swap sequences
+- Flash loan transactions
+- DeFi strategy execution
+
+**Gas Estimation:**
+Get accurate gas estimates for complex transactions:
+```javascript
+const gasUsed = results[0].gasUsed;
+console.log(`Estimated gas: ${gasUsed}`);
+```
+
+### Understanding Balance Diffs
+
+The `cumulativeBalancesDiff` shows net token balance changes:
+
+```json
+{
+  "0xUserAddress": {
+    "0xTokenAddress": "-1000000000000000000"  // Sent 1 token
+  },
+  "0xRecipientAddress": {
+    "0xTokenAddress": "1000000000000000000"   // Received 1 token
+  }
+}
+```
+
+Negative values indicate tokens leaving the address, positive values indicate tokens entering.
+
+### State Diff Analysis
+
+The `stateDiff` array shows low-level storage changes:
+
+- **address**: Contract whose storage was modified
+- **soltype**: Human-readable variable name and type
+- **original**: Value before transaction
+- **dirty**: Value after transaction
+- **raw**: Raw storage slot changes (hex format)
+
+This is useful for:
+- Debugging unexpected behavior
+- Verifying storage updates
+- Understanding contract interactions
+
+### Tenderly Integration
+
+Simulations are powered by Tenderly's simulation API. Each result includes:
+
+- **id**: Unique simulation identifier
+- **link**: Direct link to Tenderly dashboard for detailed analysis
+
+Click the link to view:
+- Function call traces
+- Event logs
+- Detailed gas breakdown
+- Storage changes visualization
+
+### Input Data Encoding
+
+The `input` field must contain properly encoded transaction data:
+
+```javascript
+import { ethers } from 'ethers';
+
+// Encoding a simple transfer
+const iface = new ethers.Interface([
+  'function transfer(address to, uint256 amount)'
+]);
+
+const input = iface.encodeFunctionData('transfer', [
+  '0xRecipientAddress',
+  ethers.parseEther('1.0')
+]);
+
+console.log(input); // 0xa9059cbb...
+```
+
+### Error Handling
+
+A transaction can be simulated successfully but still show `status: false` if it would revert on-chain:
+
+```json
+{
+  "status": false,  // Transaction would revert
+  "id": "...",
+  "link": "https://dashboard.tenderly.co/...",
+  "cumulativeBalancesDiff": {},  // No balance changes
+  "gasUsed": "21000"
+}
+```
+
+Use the Tenderly link to investigate why the transaction failed.
+
+### Supported Networks
+
+Simulation is available on networks supported by Tenderly:
+
+- Ethereum Mainnet (1)
+- Gnosis Chain (100)
+- Sepolia (11155111)
+- Other EVM-compatible networks
+
+### Best Practices
+
+1. **Validate before broadcasting**: Always simulate before sending real transactions
+2. **Check status**: Verify `status: true` in results
+3. **Review balance diffs**: Confirm expected token movements
+4. **Gas estimation**: Use `gasUsed` but add a buffer (e.g., +20%) for actual transactions
+5. **Bundle ordering**: Order transactions carefully; later ones depend on earlier state
+6. **Use Tenderly links**: Investigate unexpected results via the dashboard
+
+### Limitations
+
+- Simulations use current blockchain state; pending transactions are not included
+- Network conditions (gas prices, MEV) may differ when actually executing
+- Some randomness or time-dependent logic may behave differently
+- Simulations don't account for frontrunning or sandwich attacks

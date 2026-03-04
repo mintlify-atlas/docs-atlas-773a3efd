@@ -1,0 +1,594 @@
+---
+title: Testing Guide
+description: Comprehensive guide to writing and running tests in the CoW Protocol BFF
+---
+
+The CoW Protocol BFF uses Jest as its testing framework, integrated with NX for efficient test execution and caching.
+
+## Testing Stack
+
+- **Test Framework**: [Jest](https://jestjs.io/) v29
+- **TypeScript Support**: [ts-jest](https://kulshekhar.github.io/ts-jest/)
+- **Test Runner**: NX (with intelligent caching)
+- **Environment**: Node.js test environment
+
+## Running Tests
+
+### Run All Tests
+
+```bash
+yarn test
+```
+
+This runs tests for all projects in the monorepo using NX:
+
+```bash
+nx run-many --all --target=test
+```
+
+### Run Tests for a Specific Project
+
+<CodeGroup>
+  ```bash Run repositories tests
+  nx run repositories:test
+  ```
+
+  ```bash Run API tests
+  nx run api:test
+  ```
+
+  ```bash Run services tests
+  nx run services:test
+  ```
+</CodeGroup>
+
+### Watch Mode
+
+Run tests in watch mode for active development:
+
+```bash
+# Watch all tests in a project
+nx run repositories:test --watch
+
+# Watch tests in a specific file
+nx run repositories:test --watch --testFile=libs/repositories/src/repos/UsdRepository/UsdRepositoryCache.spec.ts
+```
+
+### Run Specific Test File
+
+```bash
+nx run repositories:test --testFile=libs/repositories/src/repos/UsdRepository/UsdRepositoryCache.spec.ts
+```
+
+### Coverage Reports
+
+```bash
+# Generate coverage report
+nx run repositories:test --coverage
+
+# Coverage is output to: coverage/libs/repositories/
+```
+
+## Test Configuration
+
+### Root Configuration
+
+The root `jest.config.ts` aggregates all project configurations:
+
+```typescript jest.config.ts
+import { getJestProjects } from '@nx/jest';
+
+export default {
+  projects: getJestProjects(),
+};
+```
+
+### Project Configuration
+
+Each project has its own `jest.config.ts`:
+
+```typescript libs/repositories/jest.config.ts
+export default {
+  displayName: 'repositories',
+  preset: '../../jest.preset.js',
+  testEnvironment: 'node',
+  transform: {
+    '^.+\\.[tj]s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json' }],
+  },
+  moduleFileExtensions: ['ts', 'js', 'html'],
+  coverageDirectory: '../../coverage/libs/repositories',
+  setupFilesAfterEnv: ['../../jest.setup.ts'],
+};
+```
+
+### NX Test Configuration
+
+Projects define test targets in `project.json`:
+
+```json project.json
+{
+  "targets": {
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "options": {
+        "jestConfig": "libs/repositories/jest.config.ts",
+        "passWithNoTests": true
+      },
+      "configurations": {
+        "ci": {
+          "ci": true,
+          "codeCoverage": true
+        }
+      }
+    }
+  }
+}
+```
+
+## Writing Tests
+
+### Test File Naming
+
+Follow these conventions:
+
+- Unit tests: `*.spec.ts`
+- E2E tests: `*.e2e-spec.ts`
+- Test files should be colocated with the code they test
+
+```
+libs/repositories/src/repos/UsdRepository/
+├── UsdRepository.ts
+├── UsdRepositoryCache.ts
+├── UsdRepositoryCache.spec.ts       # ✅ Test next to implementation
+├── UsdRepositoryCow.ts
+└── UsdRepositoryCow.spec.ts
+```
+
+### Unit Test Example
+
+Here's a real example from the codebase:
+
+```typescript UsdRepositoryCache.spec.ts
+import { SupportedChainId } from '@cowprotocol/cow-sdk';
+import IORedis from 'ioredis';
+import { CacheRepositoryRedis } from '../CacheRepository/CacheRepositoryRedis';
+import { UsdRepository } from './UsdRepository';
+import { UsdRepositoryCache } from './UsdRepositoryCache';
+
+const CACHE_VALUE_SECONDS = 10;
+const CACHE_NULL_SECONDS = 20;
+
+jest.mock('ioredis', () => {
+  return jest.fn().mockImplementation(() => ({
+    get: jest.fn(),
+    set: jest.fn(),
+  }));
+});
+
+describe('UsdRepositoryCache', () => {
+  let usdRepositoryCache: UsdRepositoryCache;
+  let redisMock: jest.Mocked<IORedis>;
+  let proxyMock: jest.Mocked<UsdRepository>;
+
+  beforeEach(() => {
+    redisMock = new IORedis() as jest.Mocked<IORedis>;
+    proxyMock = {
+      name: 'ProxyMock',
+      getUsdPrice: jest.fn(),
+      getUsdPrices: jest.fn(),
+    };
+    const cacheRepository = new CacheRepositoryRedis(redisMock);
+    usdRepositoryCache = new UsdRepositoryCache(
+      proxyMock,
+      cacheRepository,
+      'test-cache',
+      CACHE_VALUE_SECONDS,
+      CACHE_NULL_SECONDS
+    );
+  });
+
+  describe('getUsdPrice', () => {
+    it('should return price from cache', async () => {
+      // GIVEN: Cached value '100'
+      redisMock.get.mockResolvedValue('100');
+
+      // GIVEN: proxy returns 200
+      proxyMock.getUsdPrice.mockResolvedValue(200);
+
+      // WHEN: Get USD price
+      const chainId = SupportedChainId.MAINNET.toString();
+      const price = await usdRepositoryCache.getUsdPrice(chainId, '0xWETH');
+
+      // THEN: We get the cached value
+      expect(price).toEqual(100);
+      expect(proxyMock.getUsdPrice).not.toHaveBeenCalled();
+    });
+
+    it('should call the proxy if no cache, then cache the value', async () => {
+      // GIVEN: The value is not cached
+      redisMock.get.mockResolvedValue(null);
+
+      // GIVEN: proxy returns 200
+      proxyMock.getUsdPrice.mockResolvedValue(200);
+
+      // WHEN: Get USD price
+      const chainId = SupportedChainId.MAINNET.toString();
+      const price = await usdRepositoryCache.getUsdPrice(chainId, '0xWETH');
+
+      // THEN: The price matches the result from the proxy
+      expect(price).toEqual(200);
+
+      // THEN: The proxy has been called once
+      expect(proxyMock.getUsdPrice).toHaveBeenCalledWith(chainId, '0xWETH');
+
+      // THEN: The value is cached
+      expect(redisMock.set).toHaveBeenCalledWith(
+        expect.any(String),
+        '200',
+        'EX',
+        CACHE_VALUE_SECONDS
+      );
+    });
+
+    it('should throw if the proxy throws and there is no cache available', async () => {
+      // GIVEN: The value is not cached
+      redisMock.get.mockResolvedValue(null);
+
+      // GIVEN: The proxy throws an error
+      proxyMock.getUsdPrice.mockImplementation(async () => {
+        throw new Error('Network error');
+      });
+
+      // WHEN: Get USD price
+      const chainId = SupportedChainId.MAINNET.toString();
+      const pricePromise = usdRepositoryCache.getUsdPrice(chainId, '0xWETH');
+
+      // THEN: The call throws an error
+      await expect(pricePromise).rejects.toThrow('Network error');
+    });
+  });
+});
+```
+
+### Test Structure Best Practices
+
+<Steps>
+  <Step title="Use descriptive test names">
+    ```typescript
+    // Good: Describes what is being tested and expected outcome
+    it('should return price from cache when value exists', async () => {
+      // ...
+    });
+
+    // Bad: Vague description
+    it('works', async () => {
+      // ...
+    });
+    ```
+  </Step>
+
+  <Step title="Follow Given-When-Then pattern">
+    ```typescript
+    it('should calculate total when items are added', () => {
+      // GIVEN: Initial state and setup
+      const cart = new ShoppingCart();
+      const item = { id: '1', price: 100 };
+
+      // WHEN: Action is performed
+      cart.addItem(item);
+
+      // THEN: Expected outcome
+      expect(cart.getTotal()).toBe(100);
+    });
+    ```
+  </Step>
+
+  <Step title="Group related tests with describe blocks">
+    ```typescript
+    describe('UsdRepository', () => {
+      describe('getUsdPrice', () => {
+        it('should return price from cache', () => {});
+        it('should fetch from API when not cached', () => {});
+        it('should handle errors gracefully', () => {});
+      });
+
+      describe('getUsdPrices', () => {
+        it('should return multiple prices', () => {});
+      });
+    });
+    ```
+  </Step>
+
+  <Step title="Use beforeEach for setup">
+    ```typescript
+    describe('MyService', () => {
+      let service: MyService;
+      let mockDependency: jest.Mocked<Dependency>;
+
+      beforeEach(() => {
+        mockDependency = {
+          method: jest.fn(),
+        } as any;
+        service = new MyService(mockDependency);
+      });
+
+      afterEach(() => {
+        jest.clearAllMocks();
+      });
+
+      // Tests...
+    });
+    ```
+  </Step>
+</Steps>
+
+## Mocking
+
+### Mocking Modules
+
+```typescript
+// Mock an entire module
+jest.mock('ioredis', () => {
+  return jest.fn().mockImplementation(() => ({
+    get: jest.fn(),
+    set: jest.fn(),
+    del: jest.fn(),
+  }));
+});
+```
+
+### Mocking Dependencies
+
+```typescript
+// Create a typed mock
+const mockRepository: jest.Mocked<UsdRepository> = {
+  name: 'MockRepo',
+  getUsdPrice: jest.fn(),
+  getUsdPrices: jest.fn(),
+};
+
+// Configure mock return values
+mockRepository.getUsdPrice.mockResolvedValue(100);
+mockRepository.getUsdPrice.mockRejectedValue(new Error('Failed'));
+```
+
+### Spy on Methods
+
+```typescript
+const service = new MyService();
+const spy = jest.spyOn(service, 'methodName');
+
+// Call the method
+service.methodName();
+
+// Assert it was called
+expect(spy).toHaveBeenCalledTimes(1);
+expect(spy).toHaveBeenCalledWith(expectedArg);
+```
+
+## Integration Testing
+
+### Testing with Database
+
+For tests that require a database:
+
+```typescript
+import { DataSource } from 'typeorm';
+import { getTestDataSource } from '../../test/database';
+
+describe('OrderRepository', () => {
+  let dataSource: DataSource;
+  let repository: OrderRepository;
+
+  beforeAll(async () => {
+    dataSource = await getTestDataSource();
+    await dataSource.runMigrations();
+  });
+
+  afterAll(async () => {
+    await dataSource.dropDatabase();
+    await dataSource.destroy();
+  });
+
+  beforeEach(async () => {
+    repository = new OrderRepository(dataSource);
+  });
+
+  it('should save and retrieve orders', async () => {
+    const order = { /* ... */ };
+    await repository.save(order);
+    
+    const retrieved = await repository.findById(order.id);
+    expect(retrieved).toEqual(order);
+  });
+});
+```
+
+### Testing API Endpoints
+
+```typescript
+import Fastify from 'fastify';
+import { app } from '../app';
+
+describe('GET /orders', () => {
+  const fastify = Fastify();
+
+  beforeAll(async () => {
+    await fastify.register(app);
+    await fastify.ready();
+  });
+
+  afterAll(async () => {
+    await fastify.close();
+  });
+
+  it('should return list of orders', async () => {
+    const response = await fastify.inject({
+      method: 'GET',
+      url: '/orders',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      orders: expect.any(Array),
+    });
+  });
+});
+```
+
+## Special Testing Scenarios
+
+### Testing Notifications
+
+There's a special test for quickly testing PUSH notifications:
+
+```bash
+# Replace POST_TO_QUEUE_ACCOUNT with your account address
+POST_TO_QUEUE_ACCOUNT=0x79063d9173C09887d536924E2F6eADbaBAc099f5 \
+  nx test notification-producer \
+  --testFile=src/sendPush.test.ts \
+  --skip-nx-cache
+```
+
+This sends a test notification to your subscribed channels (e.g., Telegram).
+
+## CI/CD Testing
+
+### Running Tests in CI
+
+Tests run automatically in GitHub Actions:
+
+```yaml .github/workflows/ci.yml
+jobs:
+  test-and-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install dependencies
+        run: yarn install
+      - name: Run tests
+        run: yarn test
+      - name: Run linter
+        run: yarn lint
+```
+
+### CI Configuration
+
+Projects can define CI-specific test configurations:
+
+```json project.json
+{
+  "targets": {
+    "test": {
+      "configurations": {
+        "ci": {
+          "ci": true,
+          "codeCoverage": true
+        }
+      }
+    }
+  }
+}
+```
+
+Run tests in CI mode:
+
+```bash
+nx run repositories:test:ci
+```
+
+## Test Performance
+
+### NX Caching
+
+NX caches test results to avoid re-running unchanged tests:
+
+```bash
+# Skip cache (force re-run)
+nx run repositories:test --skip-nx-cache
+
+# Clear all cache
+nx reset
+```
+
+### Parallel Execution
+
+Run tests for multiple projects in parallel:
+
+```bash
+# Run all tests in parallel
+nx run-many --all --target=test --parallel --maxParallel=3
+```
+
+## Troubleshooting
+
+### Tests Hanging
+
+If tests don't complete:
+
+```bash
+# Run with detectOpenHandles to find issues
+nx run repositories:test --detectOpenHandles
+```
+
+### Module Resolution Issues
+
+```bash
+# Clear Jest cache
+jest --clearCache
+
+# Verify TypeScript paths in tsconfig.spec.json
+```
+
+### Mock Not Working
+
+Ensure mocks are hoisted:
+
+```typescript
+// Mock must be at the top level, before imports that use it
+jest.mock('module-name');
+
+import { ThingThatUsesModule } from './thing';
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Write tests alongside code">
+    Create test files when you create new modules. Don't leave testing for later.
+  </Accordion>
+
+  <Accordion title="Test behavior, not implementation">
+    Focus on what the code does, not how it does it. This makes tests more resilient to refactoring.
+  </Accordion>
+
+  <Accordion title="Keep tests simple and focused">
+    Each test should verify one behavior. If you need multiple assertions, consider if you need multiple tests.
+  </Accordion>
+
+  <Accordion title="Use descriptive names">
+    Test names should clearly describe what is being tested and what the expected outcome is.
+  </Accordion>
+
+  <Accordion title="Run tests before committing">
+    Always run `yarn test`, `yarn lint`, and `yarn build` before committing changes.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Migrations" icon="database" href="/development/database-migrations">
+    Learn about managing database changes
+  </Card>
+  <Card title="Creating Services" icon="plus" href="/development/creating-services">
+    Create new services and libraries
+  </Card>
+  <Card title="CI/CD" icon="gear" href="/deployment/ci-cd">
+    Understand the deployment pipeline
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/architecture/overview">
+    Explore the system architecture
+  </Card>
+</CardGroup>

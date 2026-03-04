@@ -1,0 +1,666 @@
+---
+title: Environment Variables
+description: Complete environment variable reference for CoW Protocol BFF services
+---
+
+Configure the BFF services using environment variables. Copy `.env.example` to `.env.docker` for Docker deployments or `.env` for local development.
+
+```bash
+# For Docker Compose
+cp .env.example .env.docker
+
+# For local development
+cp .env.example .env
+```
+
+## Application Configuration
+
+### Version and Logging
+
+<ParamField path="VERSION" type="string" default="1.0.0">
+  Application version exposed in the `/about` endpoint. Useful for tracking Docker image versions.
+</ParamField>
+
+<ParamField path="LOG_FORMAT" type="string" default="pretty">
+  Log output format. Options:
+  - `pretty` - Human-readable format for development
+  - `json` - Structured JSON format for production
+</ParamField>
+
+<ParamField path="LOG_LEVEL" type="string" default="info">
+  Logging level. Options: `debug`, `info`, `warn`, `error`
+</ParamField>
+
+### Port Configuration
+
+<ParamField path="PORT" type="number" default="8080">
+  Port number for the API service.
+  
+  - API service default: `1500`
+  - TWAP service default: `3000`
+</ParamField>
+
+## Blockchain RPC Configuration
+
+Configure RPC endpoints for each supported blockchain network. Use HTTP or WebSocket URLs.
+
+<Tip>
+  Use Infura, Alchemy, or other RPC providers for production deployments. WebSocket URLs (`wss://`) are recommended for real-time event monitoring.
+</Tip>
+
+<ParamField path="RPC_URL_1" type="string">
+  Ethereum Mainnet RPC URL
+  
+  ```bash
+  RPC_URL_1=https://mainnet.infura.io/v3/your-infura-key
+  ```
+</ParamField>
+
+<ParamField path="RPC_URL_56" type="string">
+  BNB Smart Chain RPC URL
+  
+  ```bash
+  RPC_URL_56=https://binance.llamarpc.com
+  ```
+</ParamField>
+
+<ParamField path="RPC_URL_100" type="string">
+  Gnosis Chain RPC URL
+  
+  ```bash
+  RPC_URL_100=https://rpc.gnosischain.com
+  ```
+</ParamField>
+
+<ParamField path="RPC_URL_137" type="string">
+  Polygon RPC URL
+  
+  ```bash
+  RPC_URL_137=https://polygon.infura.io/v3/your-infura-key
+  ```
+</ParamField>
+
+<ParamField path="RPC_URL_232" type="string">
+  Lens Network RPC URL
+  
+  ```bash
+  RPC_URL_232=https://rpc.lens.xyz
+  ```
+</ParamField>
+
+<ParamField path="RPC_URL_8453" type="string">
+  Base RPC URL (WebSocket recommended)
+  
+  ```bash
+  RPC_URL_8453=wss://base-mainnet.io/ws/v3/your-infura-key
+  ```
+</ParamField>
+
+<ParamField path="RPC_URL_42161" type="string">
+  Arbitrum One RPC URL (WebSocket recommended)
+  
+  ```bash
+  RPC_URL_42161=wss://arbitrum-mainnet.io/ws/v3/your-infura-key
+  ```
+</ParamField>
+
+<ParamField path="RPC_URL_43114" type="string">
+  Avalanche C-Chain RPC URL (WebSocket recommended)
+  
+  ```bash
+  RPC_URL_43114=wss://avalanche.infura.io/ws/v3/your-infura-key
+  ```
+</ParamField>
+
+<ParamField path="RPC_URL_11155111" type="string">
+  Sepolia Testnet RPC URL
+  
+  ```bash
+  RPC_URL_11155111=https://sepolia.infura.io/v3/your-infura-key
+  ```
+</ParamField>
+
+## CoW Protocol API Configuration
+
+Configure endpoints for CoW Protocol's backend services.
+
+<ParamField path="COW_API_BASE_URL" type="string" default="https://api.cow.fi">
+  Base URL for CoW Protocol API
+</ParamField>
+
+<ParamField path="COW_API_URL_1" type="string" default="https://api.cow.fi/mainnet">
+  CoW API endpoint for Ethereum Mainnet
+</ParamField>
+
+<ParamField path="COW_API_URL_100" type="string" default="https://api.cow.fi/xdai">
+  CoW API endpoint for Gnosis Chain
+</ParamField>
+
+<ParamField path="COW_API_URL_137" type="string" default="https://api.cow.fi/polygon">
+  CoW API endpoint for Polygon
+</ParamField>
+
+<ParamField path="COW_API_URL_8453" type="string" default="https://api.cow.fi/base">
+  CoW API endpoint for Base
+</ParamField>
+
+<ParamField path="COW_API_URL_42161" type="string" default="https://api.cow.fi/arbitrum_one">
+  CoW API endpoint for Arbitrum One
+</ParamField>
+
+<ParamField path="COW_API_URL_43114" type="string" default="https://api.cow.fi/avalanche">
+  CoW API endpoint for Avalanche
+</ParamField>
+
+<ParamField path="COW_API_URL_11155111" type="string" default="https://api.cow.fi/sepolia">
+  CoW API endpoint for Sepolia testnet
+</ParamField>
+
+## Database Configuration
+
+<ParamField path="DATABASE_ENABLED" type="boolean" default="false">
+  Enable PostgreSQL database. Set to `true` for services that require persistence (API, TWAP, notification producer).
+</ParamField>
+
+<ParamField path="DATABASE_HOST" type="string" default="localhost">
+  PostgreSQL host. Use `db` for Docker Compose deployments.
+  
+  ```bash
+  # Docker Compose
+  DATABASE_HOST=db
+  
+  # Local development
+  DATABASE_HOST=localhost
+  ```
+</ParamField>
+
+<ParamField path="DATABASE_PORT" type="number" default="5432">
+  PostgreSQL port
+</ParamField>
+
+<ParamField path="DATABASE_USERNAME" type="string" default="bff-db-user">
+  PostgreSQL username
+  
+  <Warning>Use strong credentials in production</Warning>
+</ParamField>
+
+<ParamField path="DATABASE_PASSWORD" type="string" default="bff-db-password">
+  PostgreSQL password
+  
+  <Warning>Never commit production passwords to version control</Warning>
+</ParamField>
+
+<ParamField path="DATABASE_NAME" type="string" default="bff-db">
+  PostgreSQL database name
+</ParamField>
+
+### Orderbook Database
+
+Separate read-only connection to the CoW Protocol orderbook database:
+
+<ParamField path="ORDERBOOK_DATABASE_HOST" type="string">
+  Orderbook database host
+</ParamField>
+
+<ParamField path="ORDERBOOK_DATABASE_PORT" type="number" default="5432">
+  Orderbook database port
+</ParamField>
+
+<ParamField path="ORDERBOOK_DATABASE_USERNAME" type="string">
+  Orderbook database username
+</ParamField>
+
+<ParamField path="ORDERBOOK_DATABASE_PASSWORD" type="string">
+  Orderbook database password
+</ParamField>
+
+<ParamField path="ORDERBOOK_DATABASE_DB_NAME" type="string">
+  Orderbook database name
+</ParamField>
+
+### Analytics Database
+
+Used for the Yield/Vampire attack features:
+
+<ParamField path="COW_ANALYTICS_DATABASE_NAME" type="string">
+  Analytics database name
+</ParamField>
+
+<ParamField path="COW_ANALYTICS_DATABASE_HOST" type="string">
+  Analytics database host
+</ParamField>
+
+<ParamField path="COW_ANALYTICS_DATABASE_PORT" type="number" default="5432">
+  Analytics database port
+</ParamField>
+
+<ParamField path="COW_ANALYTICS_DATABASE_USERNAME" type="string">
+  Analytics database username
+</ParamField>
+
+<ParamField path="COW_ANALYTICS_DATABASE_PASSWORD" type="string">
+  Analytics database password
+</ParamField>
+
+## Redis Cache Configuration
+
+<ParamField path="REDIS_ENABLED" type="boolean" default="false">
+  Enable Redis caching. Highly recommended for production to reduce RPC calls.
+</ParamField>
+
+<ParamField path="REDIS_HOST" type="string" default="localhost">
+  Redis host. Use `redis` for Docker Compose deployments.
+  
+  ```bash
+  # Docker Compose
+  REDIS_HOST=redis
+  
+  # Local development
+  REDIS_HOST=localhost
+  ```
+</ParamField>
+
+<ParamField path="REDIS_PORT" type="number" default="6379">
+  Redis port
+</ParamField>
+
+<ParamField path="REDIS_USER" type="string" default="cow_redis">
+  Redis username (configured in `conf/redis/redis.conf`)
+</ParamField>
+
+<ParamField path="REDIS_PASSWORD" type="string" default="cow_password">
+  Redis password
+  
+  <Warning>Change default password in production</Warning>
+</ParamField>
+
+<Accordion title="Redis Configuration Details">
+  The Redis configuration in `conf/redis/redis.conf` includes:
+  
+  - Password authentication
+  - Memory limit: 256MB
+  - Eviction policy: LRU (Least Recently Used)
+  - Disabled dangerous commands (FLUSHDB, FLUSHALL, CONFIG)
+  - Persistence: Disabled by default for caching
+</Accordion>
+
+## RabbitMQ Configuration
+
+Required for notification producer and consumer services:
+
+<ParamField path="QUEUE_HOST" type="string" default="localhost">
+  RabbitMQ host. Use `queue` for Docker Compose deployments.
+  
+  ```bash
+  # Docker Compose
+  QUEUE_HOST=queue
+  ```
+</ParamField>
+
+<ParamField path="QUEUE_PORT" type="number" default="5672">
+  RabbitMQ AMQP port
+</ParamField>
+
+<ParamField path="QUEUE_USER" type="string" default="rabbit">
+  RabbitMQ username
+</ParamField>
+
+<ParamField path="QUEUE_PASSWORD" type="string" default="my-rabbit-password">
+  RabbitMQ password
+  
+  <Warning>Change default password in production</Warning>
+</ParamField>
+
+<Info>
+  RabbitMQ management UI is available at `http://localhost:15672` with the same credentials.
+</Info>
+
+## Notification Services
+
+### Telegram Configuration
+
+<ParamField path="TELEGRAM_SECRET" type="string" required>
+  Telegram bot token from [@BotFather](https://t.me/botfather)
+  
+  ```bash
+  TELEGRAM_SECRET=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
+  ```
+</ParamField>
+
+### Notification Producer Configuration
+
+<ParamField path="NOTIFICATIONS_PRODUCER_CHAINS" type="string">
+  Comma-separated list of chain IDs to monitor for notifications.
+  
+  ```bash
+  # Monitor Ethereum Mainnet and Gnosis Chain
+  NOTIFICATIONS_PRODUCER_CHAINS=1,100
+  
+  # Monitor all supported networks (default if not set)
+  NOTIFICATIONS_PRODUCER_CHAINS=1,56,100,137,8453,42161,43114
+  ```
+</ParamField>
+
+## CMS Configuration
+
+<ParamField path="CMS_ENABLED" type="boolean" default="true">
+  Enable CoW Protocol CMS integration for content management
+</ParamField>
+
+<ParamField path="CMS_BASE_URL" type="string" default="https://cms.cow.fi">
+  CMS API base URL
+</ParamField>
+
+<ParamField path="CMS_API_KEY" type="string" required>
+  CMS API authentication key
+</ParamField>
+
+## External API Keys
+
+### Infura
+
+<ParamField path="INFURA_KEY" type="string" required>
+  Infura project API key for RPC access
+  
+  Get your key at [infura.io](https://infura.io)
+</ParamField>
+
+<ParamField path="INFURA_JWT_ID" type="string">
+  Infura JWT ID for enhanced security
+</ParamField>
+
+### CoinGecko
+
+<ParamField path="COINGECKO_API_KEY" type="string">
+  CoinGecko API key for price data
+</ParamField>
+
+<ParamField path="DEFAULT_COINGECKO_PROXY_UPSTREAM" type="string" default="https://api.coingecko.com">
+  CoinGecko API upstream URL
+</ParamField>
+
+<ParamField path="COINGECKO_CACHING_TIME" type="number" default="150">
+  CoinGecko response cache duration in seconds
+</ParamField>
+
+### Blockchain Data Providers
+
+<ParamField path="GOLD_RUSH_API_KEY" type="string">
+  Covalent (GoldRush) API key for blockchain data
+</ParamField>
+
+<ParamField path="TENDERLY_API_KEY" type="string">
+  Tenderly API key for transaction simulation
+</ParamField>
+
+<ParamField path="TENDERLY_ORG_NAME" type="string">
+  Tenderly organization name
+</ParamField>
+
+<ParamField path="TENDERLY_PROJECT_NAME" type="string">
+  Tenderly project name
+</ParamField>
+
+<ParamField path="ETHPLORER_API_KEY" type="string">
+  Ethplorer API key for token data
+</ParamField>
+
+<ParamField path="MORALIS_API_KEY" type="string">
+  Moralis API key for Web3 data
+</ParamField>
+
+<ParamField path="DUNE_API_KEY" type="string">
+  Dune Analytics API key for on-chain analytics
+</ParamField>
+
+### Socket API
+
+<ParamField path="SOCKET_BASE_URL" type="string">
+  Socket API base URL for cross-chain bridging
+</ParamField>
+
+<ParamField path="SOCKET_API_KEY" type="string">
+  Socket API authentication key
+</ParamField>
+
+## Proxy Configuration
+
+<ParamField path="PROXY_UPSTREAM" type="string">
+  Upstream URL for proxy requests
+</ParamField>
+
+<ParamField path="PROXY_ORIGIN" type="string">
+  Origin header for proxied requests
+</ParamField>
+
+<ParamField path="PROXY_HOST" type="string">
+  Host header for proxied requests
+</ParamField>
+
+## Security Configuration
+
+### JWT Configuration
+
+<ParamField path="JWT_CERT_PASSPHRASE" type="string" default="secret">
+  Passphrase for JWT certificate encryption
+  
+  <Warning>Use a strong passphrase in production</Warning>
+</ParamField>
+
+### CORS Configuration
+
+<ParamField path="AUTHORIZED_ORIGINS" type="string" default="cow.fi">
+  Comma-separated list of authorized domains for CORS
+  
+  ```bash
+  AUTHORIZED_ORIGINS=cow.fi,app.cow.fi,swap.cow.fi
+  ```
+</ParamField>
+
+## Advanced Configuration
+
+### WebSocket Keep-Alive
+
+<ParamField path="KEEP_ALIVE_INTERVAL_MS" type="number" default="20000">
+  WebSocket keep-alive interval in milliseconds
+</ParamField>
+
+## Service-Specific Variables
+
+### API Service
+
+The API service uses all common variables plus:
+
+```bash
+PORT=1500
+PROXY_UPSTREAM=https://api.coingecko.com
+PROXY_ORIGIN=https://cow.fi
+PROXY_HOST=api.coingecko.com
+JWT_CERT_PASSPHRASE=your-secret-passphrase
+INFURA_KEY=your-infura-key
+INFURA_JWT_ID=your-jwt-id
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_USER=cow_redis
+REDIS_PASSWORD=cow_password
+TWAP_BASE_URL=http://twap:3000/
+```
+
+### TWAP Service
+
+The TWAP service requires:
+
+```bash
+PORT=3000
+DATABASE_ENABLED=true
+DATABASE_HOST=db
+DATABASE_PORT=5432
+DATABASE_USERNAME=bff-db-user
+DATABASE_PASSWORD=bff-db-password
+DATABASE_NAME=bff-db
+```
+
+### Notification Producer
+
+The notification producer requires:
+
+```bash
+QUEUE_HOST=queue
+QUEUE_PORT=5672
+QUEUE_USER=rabbit
+QUEUE_PASSWORD=my-rabbit-password
+CMS_BASE_URL=https://cms.cow.fi
+CMS_API_KEY=your-cms-api-key
+NOTIFICATIONS_PRODUCER_CHAINS=1,100
+```
+
+### Telegram Bot
+
+The Telegram bot requires:
+
+```bash
+QUEUE_HOST=queue
+QUEUE_PORT=5672
+QUEUE_USER=rabbit
+QUEUE_PASSWORD=my-rabbit-password
+CMS_BASE_URL=https://cms.cow.fi
+CMS_API_KEY=your-cms-api-key
+TELEGRAM_SECRET=your-telegram-bot-token
+```
+
+## Environment File Examples
+
+<CodeGroup>
+
+```bash .env.docker (Docker Compose)
+# Application
+LOG_FORMAT=json
+LOG_LEVEL=info
+VERSION=0.24.0
+
+# RPC URLs
+RPC_URL_1=https://mainnet.infura.io/v3/YOUR_INFURA_KEY
+RPC_URL_100=https://rpc.gnosischain.com
+
+# Database
+DATABASE_ENABLED=true
+DATABASE_HOST=db
+DATABASE_PORT=5432
+DATABASE_USERNAME=bff-db-user
+DATABASE_PASSWORD=strong-password-here
+DATABASE_NAME=bff-db
+
+# Redis
+REDIS_ENABLED=true
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_USER=cow_redis
+REDIS_PASSWORD=strong-redis-password
+
+# RabbitMQ
+QUEUE_HOST=queue
+QUEUE_PORT=5672
+QUEUE_USER=rabbit
+QUEUE_PASSWORD=strong-queue-password
+
+# API Keys
+INFURA_KEY=your-infura-key
+COINGECKO_API_KEY=your-coingecko-key
+TELEGRAM_SECRET=your-telegram-token
+CMS_API_KEY=your-cms-key
+
+# Notifications
+NOTIFICATIONS_PRODUCER_CHAINS=1,100
+```
+
+```bash .env (Local Development)
+# Application
+LOG_FORMAT=pretty
+LOG_LEVEL=debug
+PORT=1500
+
+# RPC URLs
+RPC_URL_1=https://mainnet.infura.io/v3/YOUR_INFURA_KEY
+RPC_URL_100=https://rpc.gnosischain.com
+
+# Database (localhost)
+DATABASE_ENABLED=true
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_USERNAME=bff-db-user
+DATABASE_PASSWORD=dev-password
+DATABASE_NAME=bff-db
+
+# Redis (localhost)
+REDIS_ENABLED=true
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_USER=cow_redis
+REDIS_PASSWORD=cow_password
+
+# RabbitMQ (localhost)
+QUEUE_HOST=localhost
+QUEUE_PORT=5672
+QUEUE_USER=rabbit
+QUEUE_PASSWORD=rabbit
+
+# API Keys
+INFURA_KEY=your-infura-key
+TELEGRAM_SECRET=your-telegram-token
+```
+
+</CodeGroup>
+
+## Validation
+
+Validate your environment configuration:
+
+```bash
+# Check required variables are set
+docker-compose config
+
+# Test service connectivity
+docker-compose up -d db redis queue
+sleep 5
+docker-compose exec api yarn test
+```
+
+## Security Best Practices
+
+<Warning>
+  **Never commit sensitive environment files to version control**
+  
+  Add to `.gitignore`:
+  ```
+  .env
+  .env.docker
+  .env.local
+  .env.production
+  ```
+</Warning>
+
+<CardGroup cols={2}>
+  <Card title="Use Secrets Management" icon="lock">
+    Use AWS Secrets Manager, HashiCorp Vault, or Kubernetes Secrets for production credentials
+  </Card>
+  <Card title="Rotate Credentials" icon="rotate">
+    Regular rotate API keys, database passwords, and JWT passphrases
+  </Card>
+  <Card title="Principle of Least Privilege" icon="shield">
+    Grant minimal required permissions to database users and API keys
+  </Card>
+  <Card title="Monitor Access" icon="eye">
+    Log and monitor access to sensitive endpoints and resources
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Docker Deployment" icon="docker" href="/deployment/docker">
+    Learn how to deploy with Docker and Docker Compose
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference/introduction">
+    Explore available API endpoints
+  </Card>
+</CardGroup>

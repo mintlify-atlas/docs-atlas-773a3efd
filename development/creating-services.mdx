@@ -1,0 +1,381 @@
+---
+title: Creating Services and Libraries
+description: Guide to creating new services, applications, and libraries in the CoW Protocol BFF monorepo
+---
+
+The CoW Protocol BFF uses NX generators to scaffold new services and libraries with proper configuration, Docker support, and TypeScript setup.
+
+## NX Generators Overview
+
+The project provides three main generators for creating new code:
+
+- **`yarn new:fastify`** - Create a new Fastify API service
+- **`yarn new:node`** - Create a new Node.js application
+- **`yarn new:lib`** - Create a new shared library
+
+## Creating a Fastify API Service
+
+Use this for creating new REST API services:
+
+<Steps>
+  <Step title="Run the generator">
+    ```bash
+    yarn new:fastify
+    ```
+
+    This runs:
+    ```bash
+    nx generate @nx/node:application --framework=fastify --docker --directory=apps
+    ```
+
+    You'll be prompted for:
+    - **Application name**: e.g., `my-api`
+    - **Tags**: Optional tags for dependency constraints
+  </Step>
+
+  <Step title="What gets generated">
+    The generator creates:
+
+    ```
+    apps/my-api/
+    ├── src/
+    │   ├── app/
+    │   │   └── app.ts              # Fastify app configuration
+    │   └── main.ts                 # Application entry point
+    ├── Dockerfile                  # Docker configuration
+    ├── project.json                # NX project configuration
+    ├── tsconfig.json               # TypeScript configuration
+    ├── tsconfig.app.json           # App-specific TS config
+    ├── tsconfig.spec.json          # Test TS config
+    ├── jest.config.ts              # Jest configuration
+    └── .eslintrc.json              # ESLint configuration
+    ```
+  </Step>
+
+  <Step title="Update docker-compose.yml">
+    Add your new service to `docker-compose.yml`:
+
+    ```yaml docker-compose.yml
+    services:
+      my-api:
+        container_name: my-api
+        platform: linux/amd64
+        image: my-api:latest
+        restart: unless-stopped
+        env_file: .env.docker
+        environment:
+          DATABASE_HOST: db
+          DATABASE_PORT: ${DATABASE_PORT}
+        ports:
+          - '3001:3001'
+        networks:
+          - bff-network
+        depends_on:
+          - db
+    ```
+  </Step>
+
+  <Step title="Update CI/CD">
+    Add the new service to `.github/workflows/ci.yml`:
+
+    ```yaml .github/workflows/ci.yml
+    jobs:
+      build:
+        steps:
+          # ... existing steps
+          - name: Build my-api
+            run: nx build my-api
+    ```
+  </Step>
+</Steps>
+
+### Example: Fastify Route Structure
+
+When creating routes in your Fastify application, follow the project conventions:
+
+<CodeGroup>
+  ```typescript src/routes/example/index.ts
+  import { FastifyInstance } from 'fastify';
+  import { exampleSchema } from './example.schemas';
+
+  export default async function routes(fastify: FastifyInstance) {
+    fastify.get(
+      '/example',
+      { schema: exampleSchema },
+      async (request, reply) => {
+        return { message: 'Hello World' };
+      }
+    );
+  }
+  ```
+
+  ```typescript src/routes/example/example.schemas.ts
+  export const exampleSchema = {
+    description: 'Example endpoint',
+    tags: ['example'],
+    response: {
+      200: {
+        type: 'object',
+        properties: {
+          message: { type: 'string' },
+        },
+      },
+    },
+  };
+  ```
+</CodeGroup>
+
+<Warning>
+**Project Convention**: Keep route schemas in separate files (e.g., `*.schemas.ts`). Do not inline JSON schemas in route handlers.
+</Warning>
+
+## Creating a Node.js Application
+
+Use this for creating background workers, CLI tools, or non-HTTP services:
+
+<Steps>
+  <Step title="Run the generator">
+    ```bash
+    yarn new:node
+    ```
+
+    This runs:
+    ```bash
+    nx generate @nx/node:application --directory=apps --docker
+    ```
+  </Step>
+
+  <Step title="Example use cases">
+    Node applications are ideal for:
+    - **Background workers** (like `notification-producer`)
+    - **Message queue consumers** (like `telegram`)
+    - **Scheduled jobs and cron tasks**
+    - **CLI tools and scripts**
+  </Step>
+
+  <Step title="Configure the application">
+    Edit the generated `src/main.ts`:
+
+    ```typescript src/main.ts
+    import { logger } from '@cowprotocol/shared';
+
+    async function bootstrap() {
+      logger.info('Starting my-worker');
+      
+      // Your application logic here
+      
+      process.on('SIGTERM', async () => {
+        logger.info('SIGTERM received, shutting down gracefully');
+        process.exit(0);
+      });
+    }
+
+    bootstrap();
+    ```
+  </Step>
+</Steps>
+
+## Creating a Shared Library
+
+Use this for creating reusable code that can be shared across multiple applications:
+
+<Steps>
+  <Step title="Run the generator">
+    ```bash
+    yarn new:lib
+    ```
+
+    This runs:
+    ```bash
+    nx g @nx/node:library --directory=libs
+    ```
+
+    You'll be prompted for:
+    - **Library name**: e.g., `my-utils`
+    - **Buildable**: Choose `yes` for better caching
+  </Step>
+
+  <Step title="What gets generated">
+    ```
+    libs/my-utils/
+    ├── src/
+    │   ├── index.ts               # Public API exports
+    │   └── lib/
+    │       └── my-utils.ts        # Library code
+    ├── project.json               # NX project configuration
+    ├── tsconfig.json              # TypeScript configuration
+    ├── tsconfig.lib.json          # Library-specific TS config
+    ├── tsconfig.spec.json         # Test TS config
+    ├── jest.config.ts             # Jest configuration
+    └── .eslintrc.json             # ESLint configuration
+    ```
+  </Step>
+
+  <Step title="Add to TypeScript paths">
+    Update `tsconfig.base.json` to add the library path alias:
+
+    ```json tsconfig.base.json
+    {
+      "compilerOptions": {
+        "paths": {
+          "@cowprotocol/abis": ["libs/abis/src/index.ts"],
+          "@cowprotocol/my-utils": ["libs/my-utils/src/index.ts"],
+          // ... other paths
+        }
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Export public API">
+    Define what gets exported in `src/index.ts`:
+
+    ```typescript src/index.ts
+    // Export everything from your library
+    export * from './lib/my-utils';
+    
+    // Or be selective
+    export { MyClass, myFunction } from './lib/my-utils';
+    export type { MyType } from './lib/types';
+    ```
+  </Step>
+</Steps>
+
+### Example Libraries
+
+The BFF includes several shared libraries:
+
+- **`@cowprotocol/repositories`** - Data access layer (databases, caches, external APIs)
+- **`@cowprotocol/services`** - Business logic services
+- **`@cowprotocol/shared`** - Common utilities, types, and helpers
+- **`@cowprotocol/notifications`** - Notification logic
+- **`@cowprotocol/abis`** - Smart contract ABIs and TypeChain types
+
+## Project Configuration
+
+### Understanding project.json
+
+Each project has a `project.json` file that defines its targets:
+
+```json project.json
+{
+  "name": "my-api",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/my-api/src",
+  "projectType": "application",
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "options": {
+        "outputPath": "dist/apps/my-api",
+        "main": "apps/my-api/src/main.ts",
+        "tsConfig": "apps/my-api/tsconfig.app.json"
+      }
+    },
+    "serve": {
+      "executor": "@nx/js:node",
+      "options": {
+        "buildTarget": "my-api:build"
+      }
+    },
+    "lint": {
+      "executor": "@nx/linter:eslint",
+      "options": {
+        "lintFilePatterns": ["apps/my-api/**/*.ts"]
+      }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "options": {
+        "jestConfig": "apps/my-api/jest.config.ts"
+      }
+    }
+  }
+}
+```
+
+### Running Project Commands
+
+```bash
+# Run any target
+nx run <project-name>:<target>
+
+# Examples
+nx run my-api:build
+nx run my-api:serve
+nx run my-api:test
+nx run my-api:lint
+```
+
+## Development Best Practices
+
+### Module Boundaries
+
+NX enforces module boundaries to maintain clean architecture:
+
+- **Apps** can import from **libs**
+- **Libs** should only import from other **libs**
+- Avoid circular dependencies
+
+```typescript
+// Good: App imports from lib
+import { MyService } from '@cowprotocol/services';
+
+// Good: Lib imports from another lib
+import { logger } from '@cowprotocol/shared';
+
+// Bad: Lib importing from app
+import { ApiController } from '../../apps/api/src/controllers';
+```
+
+### Dependency Management
+
+When adding dependencies:
+
+```bash
+# Add to root dependencies (available to all projects)
+yarn add <package-name>
+
+# Add dev dependency
+yarn add -D <package-name>
+```
+
+### Building and Testing
+
+Before committing changes, run:
+
+```bash
+# Run all checks
+yarn test
+yarn lint
+yarn build
+```
+
+<Info>
+This is a requirement from `AGENTS.md`: Always run all checks before handoff.
+</Info>
+
+## NX Generators Reference
+
+For more information about NX generators:
+
+- [@nx/node:application](https://nx.dev/packages/node/generators/application) - Generate applications
+- [@nx/node:library](https://nx.dev/nx-api/node/generators/library) - Generate libraries
+- [@nx/node:setup-docker](https://nx.dev/nx-api/node/generators/setup-docker) - Add Docker support
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Testing" icon="flask" href="/development/testing">
+    Learn how to write and run tests
+  </Card>
+  <Card title="Database Migrations" icon="database" href="/development/database-migrations">
+    Manage database schema changes
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/architecture">
+    Understand the system architecture
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Explore the REST API endpoints
+  </Card>
+</CardGroup>

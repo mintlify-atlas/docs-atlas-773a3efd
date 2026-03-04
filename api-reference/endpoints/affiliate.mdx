@@ -1,0 +1,624 @@
+---
+title: Affiliate Program Endpoints
+description: Endpoints for managing affiliate codes and retrieving affiliate statistics
+---
+
+Affiliate endpoints enable partners to register affiliate codes, retrieve program details, and access performance statistics.
+
+## Get Affiliate Information
+
+<CodeGroup>
+```bash cURL
+curl "https://api.cow.fi/affiliate/0x1234567890abcdef1234567890abcdef12345678"
+```
+
+```javascript JavaScript
+const walletAddress = '0x1234567890abcdef1234567890abcdef12345678';
+
+const response = await fetch(
+  `https://api.cow.fi/affiliate/${walletAddress}`
+);
+const affiliate = await response.json();
+console.log(`Affiliate code: ${affiliate.code}`);
+```
+
+```python Python
+import requests
+
+wallet_address = '0x1234567890abcdef1234567890abcdef12345678'
+
+response = requests.get(
+    f'https://api.cow.fi/affiliate/{wallet_address}'
+)
+affiliate = response.json()
+print(f"Affiliate code: {affiliate['code']}")
+```
+</CodeGroup>
+
+Retrieves the affiliate code and program parameters for a wallet address.
+
+**Endpoint:** `GET /affiliate/{address}`
+
+### Path Parameters
+
+<ParamField path="address" type="string" required>
+  Ethereum wallet address (checksummed or lowercase)
+</ParamField>
+
+### Response
+
+<ResponseField name="code" type="string" required>
+  The affiliate code bound to this wallet
+</ResponseField>
+
+<ResponseField name="createdAt" type="string" required>
+  ISO 8601 timestamp when the affiliate was registered
+</ResponseField>
+
+<ResponseField name="rewardAmount" type="number" required>
+  Fixed reward amount per trigger (in USD)
+</ResponseField>
+
+<ResponseField name="triggerVolume" type="number" required>
+  Trading volume required to trigger a reward (in USD)
+</ResponseField>
+
+<ResponseField name="timeCapDays" type="number" required>
+  Number of days the affiliate link remains active for a trader
+</ResponseField>
+
+<ResponseField name="volumeCap" type="number" required>
+  Maximum volume that counts toward rewards per trader (in USD)
+</ResponseField>
+
+<ResponseField name="revenueSplitAffiliatePct" type="number" required>
+  Percentage of fees allocated to the affiliate
+</ResponseField>
+
+<ResponseField name="revenueSplitTraderPct" type="number" required>
+  Percentage of fees allocated to the trader
+</ResponseField>
+
+<ResponseField name="revenueSplitDaoPct" type="number" required>
+  Percentage of fees allocated to the DAO
+</ResponseField>
+
+### Response Example
+
+```json 200 - Success
+{
+  "code": "MYCOWCODE",
+  "createdAt": "2024-01-15T10:30:00.000Z",
+  "rewardAmount": 10,
+  "triggerVolume": 1000,
+  "timeCapDays": 180,
+  "volumeCap": 100000,
+  "revenueSplitAffiliatePct": 40,
+  "revenueSplitTraderPct": 40,
+  "revenueSplitDaoPct": 20
+}
+```
+
+```json 404 - Not Found
+{
+  "message": "Affiliate not found"
+}
+```
+
+```json 500 - Internal Server Error
+{
+  "message": "Unexpected error"
+}
+```
+
+```json 502 - Bad Gateway
+{
+  "message": "CMS request failed"
+}
+```
+
+---
+
+## Register Affiliate Code
+
+<CodeGroup>
+```bash cURL
+curl -X POST "https://api.cow.fi/affiliate/0x1234567890abcdef1234567890abcdef12345678" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "walletAddress": "0x1234567890abcdef1234567890abcdef12345678",
+    "code": "MYCOWCODE",
+    "signedMessage": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab"
+  }'
+```
+
+```javascript JavaScript
+import { ethers } from 'ethers';
+
+const walletAddress = '0x1234567890abcdef1234567890abcdef12345678';
+const code = 'MYCOWCODE';
+
+// Sign the EIP-712 message
+const domain = {
+  name: 'CoW Swap Affiliate',
+  version: '1'
+};
+
+const types = {
+  AffiliateCode: [
+    { name: 'walletAddress', type: 'address' },
+    { name: 'code', type: 'string' },
+    { name: 'chainId', type: 'uint256' }
+  ]
+};
+
+const message = {
+  walletAddress: walletAddress,
+  code: code,
+  chainId: 1
+};
+
+const signer = await provider.getSigner();
+const signedMessage = await signer.signTypedData(domain, types, message);
+
+// Register the affiliate code
+const response = await fetch(
+  `https://api.cow.fi/affiliate/${walletAddress}`,
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      walletAddress,
+      code,
+      signedMessage
+    })
+  }
+);
+
+const result = await response.json();
+console.log('Registered:', result);
+```
+
+```python Python
+from eth_account.messages import encode_typed_data
+import requests
+import json
+
+# Sign message with your private key
+domain = {
+    'name': 'CoW Swap Affiliate',
+    'version': '1'
+}
+
+types = {
+    'AffiliateCode': [
+        {'name': 'walletAddress', 'type': 'address'},
+        {'name': 'code', 'type': 'string'},
+        {'name': 'chainId', 'type': 'uint256'}
+    ]
+}
+
+wallet_address = '0x1234567890abcdef1234567890abcdef12345678'
+code = 'MYCOWCODE'
+
+message = {
+    'walletAddress': wallet_address,
+    'code': code,
+    'chainId': 1
+}
+
+# Sign with your account (implementation depends on your setup)
+# signed_message = account.sign_typed_data(...)
+
+response = requests.post(
+    f'https://api.cow.fi/affiliate/{wallet_address}',
+    headers={'Content-Type': 'application/json'},
+    data=json.dumps({
+        'walletAddress': wallet_address,
+        'code': code,
+        'signedMessage': signed_message
+    })
+)
+
+result = response.json()
+print('Registered:', result)
+```
+</CodeGroup>
+
+Registers a new affiliate code for a wallet address using EIP-712 signature verification.
+
+**Endpoint:** `POST /affiliate/{address}`
+
+### Path Parameters
+
+<ParamField path="address" type="string" required>
+  Ethereum wallet address (must match `walletAddress` in body)
+</ParamField>
+
+### Request Body
+
+<ParamField body="walletAddress" type="string" required>
+  Ethereum wallet address (must match path parameter)
+</ParamField>
+
+<ParamField body="code" type="string" required>
+  Affiliate code to register
+  
+  - Format: 5-20 uppercase characters
+  - Allowed: A-Z, 0-9, hyphens (-), underscores (_)
+  - Example: `MYCOW-CODE`, `AFFILIATE_123`
+</ParamField>
+
+<ParamField body="signedMessage" type="string" required>
+  EIP-712 signature of the affiliate code registration message
+</ParamField>
+
+### Response
+
+<ResponseField name="code" type="string" required>
+  The registered affiliate code (normalized to uppercase)
+</ResponseField>
+
+<ResponseField name="createdAt" type="string" required>
+  ISO 8601 timestamp of registration
+</ResponseField>
+
+### Response Example
+
+```json 201 - Created
+{
+  "code": "MYCOWCODE",
+  "createdAt": "2024-01-15T10:30:00.000Z"
+}
+```
+
+```json 400 - Bad Request
+{
+  "message": "Affiliate code format is invalid"
+}
+```
+
+```json 401 - Unauthorized
+{
+  "message": "Affiliate has invalid signature"
+}
+```
+
+```json 409 - Conflict
+{
+  "message": "Affiliate code already taken"
+}
+```
+
+---
+
+## Get Affiliate Statistics
+
+<CodeGroup>
+```bash cURL
+curl "https://api.cow.fi/affiliate/affiliate-stats/0x1234567890abcdef1234567890abcdef12345678"
+```
+
+```javascript JavaScript
+const affiliateAddress = '0x1234567890abcdef1234567890abcdef12345678';
+
+const response = await fetch(
+  `https://api.cow.fi/affiliate/affiliate-stats/${affiliateAddress}`
+);
+const stats = await response.json();
+console.log(`Total volume: $${stats.total_volume}`);
+console.log(`Active traders: ${stats.active_traders}`);
+```
+
+```python Python
+import requests
+
+affiliate_address = '0x1234567890abcdef1234567890abcdef12345678'
+
+response = requests.get(
+    f'https://api.cow.fi/affiliate/affiliate-stats/{affiliate_address}'
+)
+stats = response.json()
+print(f"Total volume: ${stats['total_volume']}")
+print(f"Active traders: {stats['active_traders']}")
+```
+</CodeGroup>
+
+Retrieves performance statistics for an affiliate from Dune Analytics.
+
+**Endpoint:** `GET /affiliate/affiliate-stats/{address}`
+
+### Path Parameters
+
+<ParamField path="address" type="string" required>
+  Affiliate's Ethereum wallet address
+</ParamField>
+
+### Response
+
+<ResponseField name="affiliate_address" type="string" required>
+  Affiliate's wallet address
+</ResponseField>
+
+<ResponseField name="referrer_code" type="string" required>
+  The affiliate's referral code
+</ResponseField>
+
+<ResponseField name="total_volume" type="number" required>
+  Total trading volume from referred traders (USD)
+</ResponseField>
+
+<ResponseField name="trigger_volume" type="number" required>
+  Volume threshold to trigger rewards (USD)
+</ResponseField>
+
+<ResponseField name="total_earned" type="number" required>
+  Total rewards earned (USD)
+</ResponseField>
+
+<ResponseField name="paid_out" type="number" required>
+  Total rewards paid out (USD)
+</ResponseField>
+
+<ResponseField name="next_payout" type="number" required>
+  Amount in next scheduled payout (USD)
+</ResponseField>
+
+<ResponseField name="left_to_next_reward" type="number" required>
+  Volume remaining until next reward trigger (USD)
+</ResponseField>
+
+<ResponseField name="active_traders" type="number" required>
+  Number of currently active traders using the code
+</ResponseField>
+
+<ResponseField name="total_traders" type="number" required>
+  Total number of traders who have used the code
+</ResponseField>
+
+<ResponseField name="lastUpdatedAt" type="string" required>
+  ISO 8601 timestamp of when statistics were last updated
+</ResponseField>
+
+### Response Example
+
+```json 200 - Success
+{
+  "affiliate_address": "0x1234567890abcdef1234567890abcdef12345678",
+  "referrer_code": "MYCOWCODE",
+  "total_volume": 150000.50,
+  "trigger_volume": 1000.00,
+  "total_earned": 1500.00,
+  "paid_out": 1000.00,
+  "next_payout": 500.00,
+  "left_to_next_reward": 250.00,
+  "active_traders": 15,
+  "total_traders": 42,
+  "lastUpdatedAt": "2024-01-15T10:30:00.000Z"
+}
+```
+
+```json 404 - Not Found
+{
+  "message": "Affiliate stats not found"
+}
+```
+
+---
+
+## Get Trader Statistics
+
+<CodeGroup>
+```bash cURL
+curl "https://api.cow.fi/affiliate/trader-stats/0xabcdef1234567890abcdef1234567890abcdef12"
+```
+
+```javascript JavaScript
+const traderAddress = '0xabcdef1234567890abcdef1234567890abcdef12';
+
+const response = await fetch(
+  `https://api.cow.fi/affiliate/trader-stats/${traderAddress}`
+);
+const stats = await response.json();
+console.log(`Bound to: ${stats.bound_referrer_code}`);
+console.log(`Eligible volume: $${stats.eligible_volume}`);
+```
+
+```python Python
+import requests
+
+trader_address = '0xabcdef1234567890abcdef1234567890abcdef12'
+
+response = requests.get(
+    f'https://api.cow.fi/affiliate/trader-stats/{trader_address}'
+)
+stats = response.json()
+print(f"Bound to: {stats['bound_referrer_code']}")
+print(f"Eligible volume: ${stats['eligible_volume']}")
+```
+</CodeGroup>
+
+Retrieves statistics for a trader participating in the affiliate program.
+
+**Endpoint:** `GET /affiliate/trader-stats/{address}`
+
+### Path Parameters
+
+<ParamField path="address" type="string" required>
+  Trader's Ethereum wallet address
+</ParamField>
+
+### Response
+
+<ResponseField name="trader_address" type="string" required>
+  Trader's wallet address
+</ResponseField>
+
+<ResponseField name="bound_referrer_code" type="string" required>
+  Affiliate code the trader is linked to
+</ResponseField>
+
+<ResponseField name="linked_since" type="string" required>
+  ISO 8601 timestamp when trader linked to affiliate
+</ResponseField>
+
+<ResponseField name="rewards_end" type="string" required>
+  ISO 8601 timestamp when rewards expire for this trader
+</ResponseField>
+
+<ResponseField name="eligible_volume" type="number" required>
+  Trading volume eligible for rewards (USD)
+</ResponseField>
+
+<ResponseField name="left_to_next_rewards" type="number" required>
+  Volume remaining until next reward (USD)
+</ResponseField>
+
+<ResponseField name="trigger_volume" type="number" required>
+  Volume threshold to trigger rewards (USD)
+</ResponseField>
+
+<ResponseField name="total_earned" type="number" required>
+  Total rewards earned by the trader (USD)
+</ResponseField>
+
+<ResponseField name="paid_out" type="number" required>
+  Total rewards paid out to the trader (USD)
+</ResponseField>
+
+<ResponseField name="next_payout" type="number" required>
+  Amount in next scheduled payout (USD)
+</ResponseField>
+
+<ResponseField name="lastUpdatedAt" type="string" required>
+  ISO 8601 timestamp of when statistics were last updated
+</ResponseField>
+
+### Response Example
+
+```json 200 - Success
+{
+  "trader_address": "0xabcdef1234567890abcdef1234567890abcdef12",
+  "bound_referrer_code": "MYCOWCODE",
+  "linked_since": "2024-01-01T00:00:00.000Z",
+  "rewards_end": "2024-07-01T00:00:00.000Z",
+  "eligible_volume": 5000.00,
+  "left_to_next_rewards": 500.00,
+  "trigger_volume": 1000.00,
+  "total_earned": 50.00,
+  "paid_out": 50.00,
+  "next_payout": 0.00,
+  "lastUpdatedAt": "2024-01-15T10:30:00.000Z"
+}
+```
+
+```json 404 - Not Found
+{
+  "message": "Trader stats not found"
+}
+```
+
+---
+
+## Notes
+
+### Affiliate Code Requirements
+
+Affiliate codes must meet these criteria:
+
+- **Length**: 5-20 characters
+- **Characters**: Uppercase A-Z, digits 0-9, hyphens (-), underscores (_)
+- **Format**: Automatically normalized to uppercase
+- **Uniqueness**: Each code can only be registered once
+
+**Valid examples:**
+- `MYCOW`
+- `AFFILIATE-123`
+- `COW_SWAP_2024`
+
+**Invalid examples:**
+- `cow` (too short, lowercase)
+- `My Affiliate Code` (spaces not allowed)
+- `affiliate@123` (special characters not allowed)
+
+### Signature Verification
+
+The API uses EIP-712 signatures to verify wallet ownership:
+
+1. **Domain**: `CoW Swap Affiliate` version `1`
+2. **Chain ID**: Always `1` (Ethereum Mainnet) for verification
+3. **Message**: Contains `walletAddress`, `code`, and `chainId`
+
+Supports both:
+- **EOA wallets**: Standard ECDSA signature verification
+- **Smart contract wallets**: ERC-1271 signature verification
+
+See [Authentication](/api-reference/authentication) for detailed signing examples.
+
+### Reward Structure
+
+The affiliate program operates on a tiered reward model:
+
+**For Affiliates:**
+- Earn fixed rewards when referred traders hit volume milestones
+- Receive percentage of trading fees based on `revenueSplitAffiliatePct`
+
+**For Traders:**
+- Receive fee discounts based on `revenueSplitTraderPct`
+- Benefits active for `timeCapDays` after first trade
+- Volume capped at `volumeCap` per trader
+
+### Statistics Data Source
+
+Statistics endpoints require Dune Analytics integration:
+
+- Data updated periodically from on-chain activity
+- Check `lastUpdatedAt` for data freshness
+- May have slight delays during high activity
+
+If Dune API is unavailable:
+```json
+{
+  "message": "Service unavailable"
+}
+```
+
+### CMS Requirement
+
+Affiliate registration and retrieval require CMS (Content Management System) integration:
+
+- Environment variable `CMS_ENABLED` must be set
+- `CMS_API_KEY` must be configured
+
+If CMS is disabled, endpoints return appropriate errors.
+
+### Address Normalization
+
+All addresses are normalized to lowercase for consistency:
+
+```javascript
+// These are equivalent:
+'0xABCDEF1234567890ABCDEF1234567890ABCDEF12'
+'0xabcdef1234567890abcdef1234567890abcdef12'
+```
+
+### Error Handling
+
+| Status | Reason | Solution |
+|--------|--------|----------|
+| 400 | Invalid code format | Use only A-Z, 0-9, -, _ (5-20 chars) |
+| 401 | Invalid signature | Re-sign with correct EIP-712 format |
+| 404 | Affiliate not found | Register an affiliate code first |
+| 409 | Code already taken | Choose a different code |
+| 409 | Wallet already registered | Each wallet can only register once |
+| 500 | Internal error | Retry after a short delay |
+| 502 | CMS error | Contact support if persistent |
+
+### Best Practices
+
+1. **Choose memorable codes**: Make them easy to share and remember
+2. **Verify signatures**: Test signature generation in development first
+3. **Cache statistics**: Don't poll stats endpoints too frequently
+4. **Handle errors gracefully**: Implement proper error handling and retry logic
+5. **Monitor performance**: Track trader acquisition and volume metrics
+6. **Communicate terms**: Clearly explain reward structure to referred traders

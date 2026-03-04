@@ -1,0 +1,323 @@
+---
+title: Notification Endpoints
+description: Endpoints for managing push notification subscriptions
+---
+
+Notification endpoints allow users to retrieve notifications for their accounts, enabling push notification features in frontend applications.
+
+## Get Account Notifications
+
+<CodeGroup>
+```bash cURL
+curl "https://api.cow.fi/accounts/0x1234567890abcdef1234567890abcdef12345678/notifications"
+```
+
+```javascript JavaScript
+const accountAddress = '0x1234567890abcdef1234567890abcdef12345678';
+
+const response = await fetch(
+  `https://api.cow.fi/accounts/${accountAddress}/notifications`
+);
+const notifications = await response.json();
+console.log(`Found ${notifications.length} notifications`);
+```
+
+```python Python
+import requests
+
+account_address = '0x1234567890abcdef1234567890abcdef12345678'
+
+response = requests.get(
+    f'https://api.cow.fi/accounts/{account_address}/notifications'
+)
+notifications = response.json()
+print(f"Found {len(notifications)} notifications")
+```
+</CodeGroup>
+
+Retrieves all notifications for a given account address.
+
+**Endpoint:** `GET /accounts/{account}/notifications`
+
+### Path Parameters
+
+<ParamField path="account" type="string" required>
+  Ethereum wallet address to retrieve notifications for
+</ParamField>
+
+### Response
+
+Returns an array of notification objects. The exact structure depends on the notification type configured in the CMS.
+
+Typical notification fields:
+
+<ResponseField name="id" type="string">
+  Unique notification identifier
+</ResponseField>
+
+<ResponseField name="account" type="string">
+  The account address this notification is for
+</ResponseField>
+
+<ResponseField name="type" type="string">
+  Type of notification (e.g., "order_filled", "order_expired")
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Human-readable notification message
+</ResponseField>
+
+<ResponseField name="timestamp" type="string">
+  ISO 8601 timestamp when the notification was created
+</ResponseField>
+
+<ResponseField name="metadata" type="object">
+  Additional notification-specific data
+</ResponseField>
+
+### Response Example
+
+```json 200 - Success
+[
+  {
+    "id": "notif_abc123",
+    "account": "0x1234567890abcdef1234567890abcdef12345678",
+    "type": "order_filled",
+    "message": "Your order has been filled",
+    "timestamp": "2024-01-15T10:30:00.000Z",
+    "metadata": {
+      "orderId": "0xabc...",
+      "executedAmount": "1000000000000000000"
+    }
+  },
+  {
+    "id": "notif_def456",
+    "account": "0x1234567890abcdef1234567890abcdef12345678",
+    "type": "order_expired",
+    "message": "Your order has expired",
+    "timestamp": "2024-01-14T08:15:00.000Z",
+    "metadata": {
+      "orderId": "0xdef..."
+    }
+  }
+]
+```
+
+Empty array if no notifications:
+```json 200 - No Notifications
+[]
+```
+
+---
+
+## Notes
+
+### CMS Requirement
+
+The notifications endpoint requires CMS (Content Management System) integration:
+
+- Environment variable `CMS_ENABLED` must be set to `true`
+- `CMS_API_KEY` must be configured
+
+If CMS is not enabled, the endpoint will not be available and the API logs:
+```
+CMS is not enabled. Please check CMS_ENABLED and CMS_API_KEY environment variables
+```
+
+### Notification System Architecture
+
+The CoW Protocol notification system consists of:
+
+1. **Notification Producer**: Monitors blockchain for relevant events
+2. **Message Queue**: RabbitMQ handles notification distribution
+3. **Notification Consumer**: Processes notifications and sends via channels
+4. **CMS Storage**: Stores notification history for retrieval
+
+### Supported Notification Types
+
+Common notification types include:
+
+| Type | Description | Trigger |
+|------|-------------|----------|
+| `order_filled` | Order successfully executed | Settlement event detected |
+| `order_expired` | Order expired without execution | Order validity period ended |
+| `order_cancelled` | Order cancelled by user | Cancellation transaction |
+| `order_partially_filled` | Partial fill occurred | Partial settlement |
+| `insufficient_balance` | Insufficient balance for order | Pre-execution check |
+| `price_improvement` | Better price achieved | Surplus detected |
+
+### Notification Channels
+
+While the API returns notification history, users can subscribe to receive notifications via:
+
+- **Telegram Bot**: Real-time messages via Telegram
+- **Web Push**: Browser push notifications
+- **Email**: Email alerts (if configured)
+- **Webhook**: Custom webhook integrations
+
+Channel subscriptions are managed separately from this read-only endpoint.
+
+### Caching
+
+Notification responses are cached for **5 minutes** (300 seconds):
+
+```
+Cache-Control: public, max-age=300
+```
+
+This reduces database load while ensuring reasonably fresh data.
+
+### Database Requirement
+
+The endpoint requires database access to retrieve notification history. If the database is unavailable, the endpoint may return errors.
+
+### Pagination
+
+Currently, the endpoint returns all notifications for an account. For accounts with many notifications, consider:
+
+- Filtering on the client side
+- Implementing local pagination
+- Only displaying recent notifications
+
+Future API versions may include pagination parameters.
+
+### Notification Retention
+
+Notifications are stored in the database with a retention policy:
+
+- **Default retention**: 90 days
+- **Automatic cleanup**: Old notifications are periodically removed
+- **Archive**: Critical notifications may be archived separately
+
+Check with your deployment configuration for specific retention settings.
+
+### Testing Locally
+
+To test notifications in development:
+
+```bash
+# Start required services
+docker-compose up -d queue db
+
+# Run migrations
+yarn migration:run
+
+# Start notification producer
+yarn producer
+
+# In another terminal, start the API
+yarn start
+
+# Query notifications
+curl http://localhost:3001/accounts/0x.../notifications
+```
+
+### Sending Test Notifications
+
+For development testing:
+
+```bash
+# Set your test account address
+export POST_TO_QUEUE_ACCOUNT=0x79063d9173C09887d536924E2F6eADbaBAc099f5
+
+# Run the test that sends a notification
+nx test notification-producer --testFile=src/sendPush.test.ts --skip-nx-cache
+```
+
+### Security Considerations
+
+**Public Endpoint**: This endpoint is publicly accessible. Any user can query notifications for any address.
+
+**Sensitive Data**: Do not include sensitive information in notification messages or metadata that shouldn't be publicly accessible.
+
+**Rate Limiting**: Consider implementing rate limiting on the client to avoid excessive queries.
+
+### Notification Structure Flexibility
+
+The notification model structure is defined in the CMS and may vary by deployment. Common fields are listed in the response schema, but actual notifications may include additional custom fields.
+
+To handle variable structures:
+
+```javascript
+const notifications = await fetch(`/accounts/${account}/notifications`)
+  .then(r => r.json());
+
+notifications.forEach(notification => {
+  // Always check for field existence
+  const type = notification.type || 'unknown';
+  const message = notification.message || 'No message';
+  
+  // Handle type-specific metadata
+  if (notification.metadata) {
+    console.log('Additional data:', notification.metadata);
+  }
+});
+```
+
+### Integration with Frontend
+
+**Polling Pattern:**
+```javascript
+// Poll for new notifications every 30 seconds
+setInterval(async () => {
+  const notifications = await fetch(
+    `/accounts/${account}/notifications`
+  ).then(r => r.json());
+  
+  // Display new notifications
+  displayNotifications(notifications);
+}, 30000);
+```
+
+**With Caching:**
+```javascript
+let lastFetch = 0;
+let cachedNotifications = [];
+
+async function getNotifications() {
+  const now = Date.now();
+  
+  // Respect 5-minute cache
+  if (now - lastFetch < 300000) {
+    return cachedNotifications;
+  }
+  
+  cachedNotifications = await fetch(
+    `/accounts/${account}/notifications`
+  ).then(r => r.json());
+  
+  lastFetch = now;
+  return cachedNotifications;
+}
+```
+
+### Error Handling
+
+| Scenario | Response | Solution |
+|----------|----------|----------|
+| CMS disabled | Service unavailable | Enable CMS configuration |
+| Invalid address | 400 Bad Request | Verify address format |
+| Database error | 500 Internal Error | Retry with exponential backoff |
+| No notifications | Empty array `[]` | Normal response, no error |
+
+### Best Practices
+
+1. **Cache locally**: Store notifications in frontend state to reduce requests
+2. **Respect cache headers**: Honor the 5-minute cache period
+3. **Handle empty responses**: Empty arrays are normal for accounts without notifications
+4. **Display timestamps**: Show when notifications were created
+5. **Group by type**: Consider grouping notifications by type in the UI
+6. **Mark as read**: Implement local read/unread state on the frontend
+7. **Pagination**: Implement client-side pagination for large notification lists
+8. **Error handling**: Gracefully handle API errors without breaking the UI
+
+### Future Enhancements
+
+Potential future features:
+
+- Server-side pagination (`?limit=20&offset=0`)
+- Filtering by type (`?type=order_filled`)
+- Date range queries (`?from=2024-01-01&to=2024-01-31`)
+- Mark as read/unread functionality
+- Notification preferences management
+- Real-time WebSocket or SSE stream

@@ -1,0 +1,627 @@
+---
+title: Database Migrations
+description: Complete guide to creating, running, and managing TypeORM database migrations in the CoW Protocol BFF
+---
+
+The CoW Protocol BFF uses [TypeORM](https://typeorm.io/) for database management and migrations. All database access and migrations are handled in the `libs/repositories` library.
+
+## Overview
+
+Migrations are version control for your database schema. They allow you to:
+
+- Track database schema changes over time
+- Apply changes consistently across environments
+- Rollback changes if needed
+- Collaborate with team members on schema changes
+
+## Migration Commands
+
+All migration commands are run from the project root:
+
+<CardGroup cols={3}>
+  <Card title="Create" icon="plus">
+    ```bash
+    yarn typeorm migration:create src/migrations/migration-name
+    ```
+  </Card>
+  <Card title="Generate" icon="wand-magic-sparkles">
+    ```bash
+    yarn migration:generate
+    ```
+  </Card>
+  <Card title="Run" icon="play">
+    ```bash
+    yarn migration:run
+    ```
+  </Card>
+</CardGroup>
+
+<CardGroup cols={2}>
+  <Card title="Revert" icon="rotate-left">
+    ```bash
+    yarn migration:revert
+    ```
+  </Card>
+  <Card title="Show Status" icon="list">
+    ```bash
+    yarn typeorm migration:show
+    ```
+  </Card>
+</CardGroup>
+
+## Creating Migrations
+
+There are two ways to create migrations:
+
+### Method 1: Manual Creation
+
+Create an empty migration file that you'll write manually:
+
+<Steps>
+  <Step title="Generate migration file">
+    ```bash
+    yarn typeorm migration:create src/migrations/add-user-table
+    ```
+
+    This creates a new file:
+    ```
+    libs/repositories/src/migrations/1745364046891-add-user-table.ts
+    ```
+  </Step>
+
+  <Step title="Write migration logic">
+    Edit the generated file to define your schema changes:
+
+    ```typescript 1745364046891-add-user-table.ts
+    import { MigrationInterface, QueryRunner } from 'typeorm';
+
+    export class AddUserTable1745364046891 implements MigrationInterface {
+      public async up(queryRunner: QueryRunner): Promise<void> {
+        // Create the users table
+        await queryRunner.query(`
+          CREATE TABLE users (
+            id SERIAL PRIMARY KEY,
+            address TEXT NOT NULL UNIQUE,
+            email TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )
+        `);
+
+        // Create an index on address for faster lookups
+        await queryRunner.query(`
+          CREATE INDEX idx_users_address ON users(address)
+        `);
+      }
+
+      public async down(queryRunner: QueryRunner): Promise<void> {
+        // Drop the index
+        await queryRunner.query(`
+          DROP INDEX IF EXISTS idx_users_address
+        `);
+
+        // Drop the table
+        await queryRunner.query(`
+          DROP TABLE IF EXISTS users
+        `);
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Test the migration">
+    ```bash
+    # Run the migration
+    yarn migration:run
+
+    # Verify it worked, then test rollback
+    yarn migration:revert
+
+    # Run again for production
+    yarn migration:run
+    ```
+  </Step>
+</Steps>
+
+### Method 2: Auto-generation from Entities
+
+Generate migrations automatically based on entity changes:
+
+<Steps>
+  <Step title="Define your entities">
+    Create or update entity classes in `libs/repositories/src/database`:
+
+    ```typescript libs/repositories/src/database/User.entity.ts
+    import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+
+    @Entity('users')
+    export class User {
+      @PrimaryGeneratedColumn()
+      id: number;
+
+      @Column({ unique: true })
+      address: string;
+
+      @Column({ nullable: true })
+      email?: string;
+
+      @CreateDateColumn()
+      created_at: Date;
+
+      @UpdateDateColumn()
+      updated_at: Date;
+    }
+    ```
+  </Step>
+
+  <Step title="Generate migration from entities">
+    ```bash
+    yarn migration:generate
+    ```
+
+    This runs:
+    ```bash
+    nx run typeorm migration:generate --pretty \
+      -d src/datasources/orm/datasource.config.ts \
+      src/migrations/migration
+    ```
+
+    TypeORM compares your entities with the current database schema and generates the necessary SQL.
+  </Step>
+
+  <Step title="Review and run">
+    Review the generated migration file, then run it:
+
+    ```bash
+    yarn migration:run
+    ```
+  </Step>
+</Steps>
+
+## Real Example: Initial Migration
+
+Here's the actual initial migration from the BFF codebase:
+
+```typescript libs/repositories/src/migrations/1745364046891-initial-migration.ts
+import { MigrationInterface, QueryRunner } from 'typeorm';
+
+export class InitialMigration1745364046891 implements MigrationInterface {
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    // This table stores the state of various indexers, allowing them to track their progress
+    // and resume from where they left off after restarts.
+    await queryRunner.query(`
+      CREATE TABLE indexer_state (
+        key TEXT NOT NULL,
+        chain_id INTEGER,
+        state JSONB,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (key, chain_id)
+      )
+    `);
+
+    // Update the updated_at column with the current timestamp
+    await queryRunner.query(`
+      CREATE OR REPLACE FUNCTION set_updated_at()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        NEW.updated_at = NOW();
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+
+    // Create a trigger to automatically update the updated_at column
+    await queryRunner.query(`
+      CREATE TRIGGER trigger_set_updated_at
+      BEFORE UPDATE ON indexer_state
+      FOR EACH ROW
+      EXECUTE FUNCTION set_updated_at();
+    `);
+  }
+
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    // Drop the trigger
+    await queryRunner.query(`
+      DROP TRIGGER IF EXISTS trigger_set_updated_at ON indexer_state
+    `);
+
+    // Drop the function
+    await queryRunner.query(`
+      DROP FUNCTION IF EXISTS set_updated_at
+    `);
+
+    // Drop the table
+    await queryRunner.query(`
+      DROP TABLE IF EXISTS indexer_state
+    `);
+  }
+}
+```
+
+This migration demonstrates:
+- Creating tables with proper types
+- Using PostgreSQL-specific features (JSONB, triggers)
+- Automatic timestamp management
+- Proper rollback logic in `down()`
+
+## Running Migrations
+
+### Run Pending Migrations
+
+```bash
+yarn migration:run
+```
+
+This executes:
+```bash
+nx run typeorm migration:run -d src/datasources/orm/datasource.config.ts
+```
+
+**What it does:**
+- Connects to the database
+- Checks which migrations have been run (stored in `migrations` table)
+- Runs all pending migrations in order
+- Records completed migrations
+
+### Check Migration Status
+
+```bash
+# Show which migrations have been run
+yarn typeorm migration:show
+```
+
+Output:
+```
+[X] InitialMigration1745364046891
+[X] AddUserTable1745364056789
+[ ] AddOrdersTable1745364067890  <- Pending
+```
+
+## Reverting Migrations
+
+### Revert Last Migration
+
+```bash
+yarn migration:revert
+```
+
+This executes:
+```bash
+nx run typeorm migration:revert -d src/datasources/orm/datasource.config.ts
+```
+
+**What it does:**
+- Finds the most recently run migration
+- Executes its `down()` method
+- Removes it from the migrations table
+
+<Warning>
+**Important**: Only the **last** migration can be reverted. If you need to revert multiple migrations, run this command multiple times.
+</Warning>
+
+### Revert Multiple Migrations
+
+```bash
+# Revert the last 3 migrations
+yarn migration:revert
+yarn migration:revert
+yarn migration:revert
+```
+
+## Migration Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always write down() methods">
+    Every migration must have a corresponding rollback in the `down()` method:
+
+    ```typescript
+    public async down(queryRunner: QueryRunner): Promise<void> {
+      // Reverse everything done in up()
+      // Drop tables, remove columns, delete indexes, etc.
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Test migrations in both directions">
+    Always test both `up` and `down`:
+
+    ```bash
+    # Apply migration
+    yarn migration:run
+    
+    # Test the application works
+    yarn start
+    
+    # Test rollback
+    yarn migration:revert
+    
+    # Verify old schema still works
+    yarn start
+    
+    # Re-apply for production
+    yarn migration:run
+    ```
+  </Accordion>
+
+  <Accordion title="Use transactions for safety">
+    Migrations run in transactions by default. Keep operations atomic:
+
+    ```typescript
+    public async up(queryRunner: QueryRunner): Promise<void> {
+      // All queries run in a transaction
+      // If any fails, all changes are rolled back
+      await queryRunner.query(`CREATE TABLE...`);
+      await queryRunner.query(`CREATE INDEX...`);
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Never modify existing migrations">
+    Once a migration has been run in production, **never modify it**. Instead:
+
+    - Create a new migration to make additional changes
+    - Keep the version history intact
+
+    ```bash
+    # Bad: Modifying existing migration
+    # edit libs/repositories/src/migrations/1745364046891-initial-migration.ts
+
+    # Good: Creating new migration
+    yarn typeorm migration:create src/migrations/add-missing-index
+    ```
+  </Accordion>
+
+  <Accordion title="Make migrations backward compatible">
+    When possible, make changes in multiple steps:
+
+    ```typescript
+    // Step 1: Add new column as nullable
+    await queryRunner.query(`ALTER TABLE users ADD COLUMN new_field TEXT`);
+
+    // Step 2: (Deploy code that uses new_field)
+
+    // Step 3: (Next migration) Make it required
+    await queryRunner.query(`ALTER TABLE users ALTER COLUMN new_field SET NOT NULL`);
+    ```
+  </Accordion>
+
+  <Accordion title="Use descriptive names">
+    ```bash
+    # Good names
+    yarn typeorm migration:create src/migrations/add-user-email-index
+    yarn typeorm migration:create src/migrations/add-orders-table
+    yarn typeorm migration:create src/migrations/change-price-to-bigint
+
+    # Bad names
+    yarn typeorm migration:create src/migrations/update
+    yarn typeorm migration:create src/migrations/fix
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Common Migration Patterns
+
+### Adding a Table
+
+```typescript
+public async up(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.query(`
+    CREATE TABLE orders (
+      id SERIAL PRIMARY KEY,
+      user_address TEXT NOT NULL,
+      amount DECIMAL(78, 0) NOT NULL,
+      status TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await queryRunner.query(`
+    CREATE INDEX idx_orders_user_address ON orders(user_address)
+  `);
+}
+
+public async down(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.query(`DROP INDEX IF EXISTS idx_orders_user_address`);
+  await queryRunner.query(`DROP TABLE IF EXISTS orders`);
+}
+```
+
+### Adding a Column
+
+```typescript
+public async up(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.query(`
+    ALTER TABLE users ADD COLUMN last_login TIMESTAMPTZ
+  `);
+}
+
+public async down(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.query(`
+    ALTER TABLE users DROP COLUMN last_login
+  `);
+}
+```
+
+### Renaming a Column
+
+```typescript
+public async up(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.query(`
+    ALTER TABLE orders RENAME COLUMN amount TO total_amount
+  `);
+}
+
+public async down(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.query(`
+    ALTER TABLE orders RENAME COLUMN total_amount TO amount
+  `);
+}
+```
+
+### Changing Column Type
+
+```typescript
+public async up(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.query(`
+    ALTER TABLE orders 
+    ALTER COLUMN amount TYPE BIGINT USING amount::BIGINT
+  `);
+}
+
+public async down(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.query(`
+    ALTER TABLE orders 
+    ALTER COLUMN amount TYPE INTEGER USING amount::INTEGER
+  `);
+}
+```
+
+### Data Migrations
+
+```typescript
+public async up(queryRunner: QueryRunner): Promise<void> {
+  // Add new column
+  await queryRunner.query(`
+    ALTER TABLE users ADD COLUMN username TEXT
+  `);
+
+  // Populate with data
+  await queryRunner.query(`
+    UPDATE users 
+    SET username = LOWER(SUBSTRING(address FROM 1 FOR 10))
+    WHERE username IS NULL
+  `);
+
+  // Make it required
+  await queryRunner.query(`
+    ALTER TABLE users ALTER COLUMN username SET NOT NULL
+  `);
+}
+```
+
+## TypeORM Configuration
+
+Migrations are configured in `libs/repositories/project.json`:
+
+```json project.json
+{
+  "targets": {
+    "typeorm": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "ts-node --project tsconfig.lib.json ../../node_modules/.bin/typeorm",
+        "cwd": "libs/repositories"
+      }
+    },
+    "migration:generate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "nx run typeorm migration:generate --pretty -d src/datasources/orm/datasource.config.ts src/migrations/migration",
+        "cwd": "libs/repositories"
+      }
+    },
+    "migration:run": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "nx run typeorm migration:run -d src/datasources/orm/datasource.config.ts",
+        "cwd": "libs/repositories"
+      }
+    },
+    "migration:revert": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "nx run typeorm migration:revert -d src/datasources/orm/datasource.config.ts",
+        "cwd": "libs/repositories"
+      }
+    }
+  }
+}
+```
+
+## Migrations in Production
+
+### Deployment Workflow
+
+<Steps>
+  <Step title="Run migrations before deploying">
+    Always run migrations before deploying new code:
+
+    ```bash
+    # In production environment
+    yarn migration:run
+    ```
+  </Step>
+
+  <Step title="Deploy application">
+    Deploy the new application version after migrations complete successfully.
+  </Step>
+
+  <Step title="Monitor for issues">
+    Watch logs and metrics for any issues. If problems occur, you can rollback:
+
+    ```bash
+    yarn migration:revert
+    ```
+  </Step>
+</Steps>
+
+### Database Backup
+
+<Warning>
+Always backup your database before running migrations in production:
+
+```bash
+# PostgreSQL backup
+pg_dump -h localhost -U bff-db-user -d bff-db > backup.sql
+```
+</Warning>
+
+## Troubleshooting
+
+### Migration Already Exists
+
+```
+Error: Migration already exists
+```
+
+**Solution**: The migration has already been recorded. Check with:
+```bash
+yarn typeorm migration:show
+```
+
+### Cannot Connect to Database
+
+```
+Error: connect ECONNREFUSED
+```
+
+**Solution**: Ensure the database is running:
+```bash
+docker-compose up -d db
+```
+
+### Migration Failed
+
+```
+Error: QueryFailedError: ...
+```
+
+**Solution**: Check your SQL syntax and database state. The transaction will rollback automatically, so you can fix and retry.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Setup Guide" icon="rocket" href="/development/setup">
+    Set up your development environment
+  </Card>
+  <Card title="Testing" icon="flask" href="/development/testing">
+    Learn about testing strategies
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/architecture/overview">
+    Understand the system design
+  </Card>
+  <Card title="Deployment" icon="cloud" href="/deployment/overview">
+    Deploy to production
+  </Card>
+</CardGroup>

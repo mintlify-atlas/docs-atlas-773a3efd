@@ -1,97 +1,236 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: CoW Protocol BFF Documentation
+description: Backend for Frontend services that power CoW Swap and CoW Protocol applications
+mode: custom
 ---
 
-## Setting up
+<div className="relative overflow-hidden bg-gradient-to-br from-[#0D5FFF] to-[#0a4acc] dark:from-[#0D5FFF] dark:to-[#0a4acc] py-20">
+  <div className="max-w-7xl mx-auto px-6 lg:px-8">
+    <div className="lg:grid lg:grid-cols-12 lg:gap-8 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white dark:text-white mb-6">
+          CoW Protocol BFF
+        </h1>
+        <p className="text-xl sm:text-2xl text-white/90 dark:text-white/90 mb-8 max-w-2xl">
+          TypeScript-based backend services that power the CoW Swap frontend with token pricing, notifications, yield aggregation, and more
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <a 
+            href="/quickstart" 
+            className="inline-flex items-center px-6 py-3 rounded-lg bg-white text-[#0D5FFF] font-semibold hover:bg-gray-100 transition-colors no-underline"
+          >
+            Get Started
+            <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </a>
+          <a 
+            href="/api-reference/introduction" 
+            className="inline-flex items-center px-6 py-3 rounded-lg border-2 border-white/30 bg-white/10 text-white font-semibold hover:bg-white/20 transition-colors no-underline"
+          >
+            API Reference
+          </a>
+        </div>
+      </div>
+      <div className="hidden lg:block lg:col-span-5">
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0D5FFF]/20 to-transparent rounded-lg"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-4">
+    Quick start
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Get the BFF services running locally in minutes
+  </p>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+  <Steps>
+    <Step title="Install dependencies">
+      Clone the repository and install dependencies with Yarn.
+      
+      ```bash
+      git clone https://github.com/cowprotocol/bff.git
+      cd bff
+      yarn install
+      ```
+    </Step>
+    
+    <Step title="Configure environment">
+      Create a `.env` file from the example template.
+      
+      ```bash
+      cp .env.example .env
+      ```
+      
+      Edit `.env` to add your RPC URLs and API keys for the chains you want to support.
+    </Step>
+    
+    <Step title="Start services">
+      Launch PostgreSQL, RabbitMQ, and Redis with Docker Compose, then start the API.
+      
+      ```bash
+      docker-compose up -d db queue redis
+      yarn migration:run
+      yarn start
+      ```
+      
+      The API will be available at `http://localhost:3001`
+    </Step>
+    
+    <Step title="Test the API">
+      Make your first API call to get token prices.
+      
+      ```bash
+      curl http://localhost:3001/1/tokens/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/usdPrice
+      ```
+      
+      <Accordion title="Example response">
+        ```json
+        {
+          "price": 3561.1267842
+        }
+        ```
+      </Accordion>
+    </Step>
+  </Steps>
+</div>
 
-## Make it yours
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-4">
+    Explore the documentation
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Everything you need to work with CoW Protocol BFF
+  </p>
 
-Design a docs site that looks great and empowers your users.
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <a href="/introduction" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#0D5FFF] dark:hover:border-[#0D5FFF] overflow-hidden transition-colors no-underline">
+      <div className="p-6">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2 group-hover:text-[#0D5FFF] transition-colors">
+          Introduction
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Learn about the BFF architecture, key features, and technology stack
+        </p>
+        <span className="text-sm text-[#0D5FFF] group-hover:text-[#0D5FFF] flex items-center">
+          Read more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+    <a href="/architecture" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#0D5FFF] dark:hover:border-[#0D5FFF] overflow-hidden transition-colors no-underline">
+      <div className="p-6">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2 group-hover:text-[#0D5FFF] transition-colors">
+          Architecture
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Understand the monorepo structure, services, and design patterns
+        </p>
+        <span className="text-sm text-[#0D5FFF] group-hover:text-[#0D5FFF] flex items-center">
+          Read more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
 
-## Create beautiful pages
+    <a href="/services/api" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#0D5FFF] dark:hover:border-[#0D5FFF] overflow-hidden transition-colors no-underline">
+      <div className="p-6">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2 group-hover:text-[#0D5FFF] transition-colors">
+          Services
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Explore the API, notification producer, Telegram bot, and TWAP service
+        </p>
+        <span className="text-sm text-[#0D5FFF] group-hover:text-[#0D5FFF] flex items-center">
+          Read more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
 
-Everything you need to create world-class documentation.
+    <a href="/api-reference/introduction" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#0D5FFF] dark:hover:border-[#0D5FFF] overflow-hidden transition-colors no-underline">
+      <div className="p-6">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2 group-hover:text-[#0D5FFF] transition-colors">
+          API Reference
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Complete REST API documentation with endpoints and examples
+        </p>
+        <span className="text-sm text-[#0D5FFF] group-hover:text-[#0D5FFF] flex items-center">
+          Read more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+  </div>
+</div>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-4">
+    Key features
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Powerful capabilities for DeFi applications
+  </p>
 
-## Need inspiration?
+  <CardGroup cols={2}>
+    <Card title="Multi-chain support" icon="globe">
+      Support for Ethereum, Gnosis Chain, Polygon, Arbitrum, Base, Avalanche, and more
+    </Card>
+    <Card title="Real-time balances" icon="chart-line">
+      Server-Sent Events (SSE) for live token balance and allowance updates
+    </Card>
+    <Card title="Push notifications" icon="bell">
+      Telegram-based notifications via RabbitMQ for order status and alerts
+    </Card>
+    <Card title="Token pricing" icon="dollar-sign">
+      Multi-source price feeds from CoinGecko, CoW API, and other providers
+    </Card>
+    <Card title="Slippage calculation" icon="percent">
+      Dynamic slippage tolerance based on market volatility analysis
+    </Card>
+    <Card title="Transaction simulation" icon="flask">
+      Tenderly-powered simulation to preview trade outcomes
+    </Card>
+    <Card title="Yield aggregation" icon="chart-area">
+      Track and compare DeFi yield opportunities across protocols
+    </Card>
+    <Card title="Affiliate tracking" icon="users">
+      Complete affiliate program with statistics and revenue tracking
+    </Card>
+  </CardGroup>
+</div>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="rounded-2xl bg-gradient-to-br from-[#0D5FFF]/10 to-[#65B3FF]/10 dark:from-[#0D5FFF]/20 dark:to-[#65B3FF]/20 border border-[#0D5FFF]/20 dark:border-[#0D5FFF]/30 p-8">
+    <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-3">
+      Ready to get started?
+    </h2>
+    <p className="text-base text-gray-600 dark:text-gray-400 mb-6">
+      Follow our quickstart guide to set up your development environment and start building with the BFF services.
+    </p>
+    <a 
+      href="/quickstart"
+      className="inline-flex items-center px-6 py-3 rounded-lg bg-[#0D5FFF] text-white font-semibold hover:bg-[#0a4acc] transition-colors no-underline"
+    >
+      Get Started
+      <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+      </svg>
+    </a>
+  </div>
+</div>
