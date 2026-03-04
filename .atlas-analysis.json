@@ -1,0 +1,123 @@
+{
+  "projectType": "api-service",
+  "projectName": "CoW Protocol BFF",
+  "projectDescription": "Backend for Frontend services that enhance user experience for CoW Swap and CoW Protocol applications",
+  "theme": "aspen",
+  "primaryColor": "#0D5FFF",
+  "lightColor": "#65B3FF",
+  "darkColor": "#0D5FFF",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Services",
+            "pages": [
+              "services/api",
+              "services/notification-producer",
+              "services/telegram",
+              "services/twap"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/setup",
+              "development/creating-services",
+              "development/testing",
+              "development/database-migrations"
+            ]
+          },
+          {
+            "group": "Libraries",
+            "pages": [
+              "libraries/repositories",
+              "libraries/services",
+              "libraries/shared"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/docker",
+              "deployment/environment-variables"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api-reference/introduction",
+              "api-reference/authentication"
+            ]
+          },
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api-reference/endpoints/tokens",
+              "api-reference/endpoints/accounts",
+              "api-reference/endpoints/markets",
+              "api-reference/endpoints/simulation",
+              "api-reference/endpoints/yield",
+              "api-reference/endpoints/affiliate",
+              "api-reference/endpoints/notifications"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Fastify-based REST API with auto-loaded routes",
+    "Real-time balance tracking with Server-Sent Events (SSE)",
+    "Push notifications via Telegram and RabbitMQ",
+    "Token price feeds from multiple sources (CoinGecko, CoW API)",
+    "Market slippage tolerance calculation",
+    "Transaction simulation using Tenderly",
+    "DeFi yield aggregation and pool information",
+    "Affiliate program tracking and statistics",
+    "Multi-chain support (Ethereum, Gnosis, Polygon, Arbitrum, Base, etc.)",
+    "TypeORM-based PostgreSQL repositories",
+    "Redis caching with fallback strategies",
+    "NX monorepo with apps and shared libraries"
+  ],
+  "publicApiSurface": [
+    "GET /{chainId}/tokens/{tokenAddress}/usdPrice",
+    "GET /{chainId}/tokens/{tokenAddress}/topHolders",
+    "GET /{chainId}/accounts/{userAddress}/balances",
+    "GET /{chainId}/accounts/{userAddress}/balances/sse",
+    "GET /{chainId}/address/{address}/balances",
+    "GET /{chainId}/markets/{baseTokenAddress}-{quoteTokenAddress}/slippageTolerance",
+    "POST /{chainId}/simulation/simulateBundle",
+    "GET /{chainId}/yield/poolsInfo",
+    "GET /{chainId}/yield/poolsAverageApr",
+    "GET /accounts/{account}/notifications",
+    "POST /accounts/{account}/notifications",
+    "GET /affiliate/{address}",
+    "GET /affiliate/affiliate-stats/{address}",
+    "GET /affiliate/trader-stats/{address}",
+    "GET /ref-codes/{code}",
+    "AffiliateProgramExportService",
+    "AffiliateStatsService",
+    "BalanceTrackingService",
+    "HooksService",
+    "SimulationService",
+    "SlippageService",
+    "TokenBalancesService",
+    "TokenHolderService",
+    "UsdService"
+  ]
+}
