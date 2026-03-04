@@ -1,0 +1,112 @@
+---
+title: Miscellaneous endpoints
+description: Utility endpoints including API information and proxies
+---
+
+## GET /about
+
+Returns information about the BFF API service, including version and git commit hash.
+
+### Response
+
+<ResponseField name="name" type="string">
+  Name of the service. Returns `"BFF API"`.
+</ResponseField>
+
+<ResponseField name="version" type="string">
+  Version of the API service, set via the `VERSION` environment variable.
+</ResponseField>
+
+<ResponseField name="gitCommitHash" type="string">
+  Git commit hash of the deployed version (optional, only if `git-commit-hash.txt` file exists).
+</ResponseField>
+
+### Example Request
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:3001/about
+```
+
+```javascript JavaScript
+const response = await fetch('http://localhost:3001/about');
+const data = await response.json();
+console.log(`API Version: ${data.version}`);
+```
+
+```python Python
+import requests
+
+response = requests.get("http://localhost:3001/about")
+data = response.json()
+print(f"API Version: {data['version']}")
+```
+</CodeGroup>
+
+### Example Response
+
+```json
+{
+  "name": "BFF API",
+  "version": "0.24.0",
+  "gitCommitHash": "abc123def456"
+}
+```
+
+### Notes
+
+<Info>
+  The version is typically set during deployment via the `VERSION` environment variable. In development, it defaults to a placeholder message.
+</Info>
+
+<Info>
+  Responses are cached for 10 minutes.
+</Info>
+
+## GET /
+
+Root endpoint that redirects to the Swagger documentation.
+
+### Response
+
+Returns a 307 redirect to `/docs/static/index.html` where you can explore the interactive API documentation.
+
+### Example
+
+```bash
+curl -L http://localhost:3001/
+# Redirects to http://localhost:3001/docs/static/index.html
+```
+
+## TWAP Proxy
+
+The API can optionally proxy requests to a TWAP (Time-Weighted Average Price) service.
+
+### Configuration
+
+Set the `TWAP_BASE_URL` environment variable to enable the TWAP proxy:
+
+```bash
+TWAP_BASE_URL=http://localhost:3000
+```
+
+### Usage
+
+When configured, all requests to `/twap/*` are proxied to the TWAP service. This allows the frontend to make TWAP-related requests through the BFF API.
+
+### Example
+
+```bash
+# With TWAP_BASE_URL=http://localhost:3000
+curl http://localhost:3001/twap/orders
+# Proxies to http://localhost:3000/orders
+```
+
+<Note>
+  If `TWAP_BASE_URL` is not set, the TWAP proxy will not be available.
+</Note>
+
+## Related Documentation
+
+- [Environment Variables](/deployment/environment-variables) - Configuration options
+- [TWAP Service](/services/twap) - Standalone TWAP service documentation

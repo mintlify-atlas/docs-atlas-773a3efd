@@ -96,7 +96,9 @@
               "api-reference/endpoints/simulation",
               "api-reference/endpoints/yield",
               "api-reference/endpoints/affiliate",
-              "api-reference/endpoints/notifications"
+              "api-reference/endpoints/notifications",
+              "api-reference/endpoints/hooks",
+              "api-reference/endpoints/misc"
             ]
           }
         ]
